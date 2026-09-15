@@ -8,12 +8,23 @@ credentials.json
 # IDE / OS
 .idea/
 .vscode/
+*.iml
 *.swp
 Thumbs.db
 .DS_Store
 
-# Build artifacts (future)
+# Java / Maven
 target/
-build/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.jar
+
+# Node / UI
 node_modules/
 dist/
+build/
+.next/
+.vite/
+
+# Logs
+*.log
+logs/
