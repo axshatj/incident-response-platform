@@ -1,0 +1,19 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Build artifacts (future)
+target/
+build/
+node_modules/
+dist/
