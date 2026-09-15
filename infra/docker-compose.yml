@@ -1,0 +1,49 @@
+# Local dev stack for Phase 1.
+# Usage (from the repo root):
+#   docker compose -f infra/docker-compose.yml up --build
+#
+# Services:
+#   postgres          - PostgreSQL 16
+#   incident-service  - Spring Boot 3, exposes 8080
+
+name: irp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: irp-postgres
+    environment:
+      POSTGRES_DB: irp
+      POSTGRES_USER: irp
+      POSTGRES_PASSWORD: irp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U irp -d irp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  incident-service:
+    build:
+      context: ..
+      dockerfile: services/incident-service/Dockerfile
+    container_name: irp-incident-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      IRP_DB_URL: jdbc:postgresql://postgres:5432/irp
+      IRP_DB_USER: irp
+      IRP_DB_PASSWORD: irp
+      IRP_INCIDENT_PORT: 8080
+      IRP_CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

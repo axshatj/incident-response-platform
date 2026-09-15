@@ -1,0 +1,10 @@
+**/target/
+**/node_modules/
+**/build/
+**/dist/
+**/.git/
+**/.idea/
+**/.vscode/
+**/.mvn/wrapper/maven-wrapper.jar
+**/*.log
+ui/
