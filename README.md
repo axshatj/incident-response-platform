@@ -1,5 +1,7 @@
 # Autonomous Incident Response Platform
 
+[![CI](https://github.com/axshatj/incident-response-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/axshatj/incident-response-platform/actions/workflows/ci.yml)
+
 Production-style AI platform that detects, investigates, diagnoses, and safely remediates distributed-system incidents using event-driven Java services, observability data, RAG, MCP, and policy-controlled AI agents.
 
 ## Documentation
