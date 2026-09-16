@@ -16,9 +16,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class IncidentMetrics {
 
-    private static final String CREATED = "irp_incidents_created_total";
-    private static final String TRANSITIONS = "irp_incident_transitions_total";
-    private static final String ILLEGAL = "irp_incident_illegal_transitions_total";
+    // Names use dot notation so Micrometer converts them consistently across
+    // registries. We intentionally avoid a "_created" segment because
+    // Prometheus/OpenMetrics reserves it for auto-generated counter timestamps.
+    private static final String CREATED = "irp.incident.opened";
+    private static final String TRANSITIONS = "irp.incident.transitions";
+    private static final String ILLEGAL = "irp.incident.illegal_transitions";
 
     private final MeterRegistry registry;
 

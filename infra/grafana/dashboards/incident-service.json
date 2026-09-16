@@ -67,7 +67,7 @@
       "id": 3,
       "targets": [
         {
-          "expr": "sum by (severity, environment) (increase(irp_incidents_created_total[5m]))",
+          "expr": "sum by (severity, environment) (increase(irp_incident_opened_total[5m]))",
           "legendFormat": "{{severity}} / {{environment}}",
           "refId": "A"
         }

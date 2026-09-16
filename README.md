@@ -28,7 +28,7 @@ Delivered:
 - REST API (`/api/incidents/*`) and React dashboard (Vite + TS + Tailwind)
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics**: `irp_incidents_created_total`, `irp_incident_transitions_total`, `irp_incident_illegal_transitions_total`
+- **Custom domain metrics**: `irp_incident_opened_total`, `irp_incident_transitions_total`, `irp_incident_illegal_transitions_total`
 - **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
 
 Next: Phase 3 — Kafka event-driven processing.
