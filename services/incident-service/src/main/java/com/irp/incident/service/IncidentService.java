@@ -6,6 +6,8 @@ import com.irp.incident.domain.IncidentEvent;
 import com.irp.incident.domain.IncidentNotFoundException;
 import com.irp.incident.domain.IncidentStatus;
 import com.irp.incident.domain.Severity;
+import com.irp.incident.eventing.AlertPayload;
+import com.irp.incident.eventing.IncidentEventPublisher;
 import com.irp.incident.observability.IncidentMetrics;
 import com.irp.incident.repository.IncidentEventRepository;
 import com.irp.incident.repository.IncidentRepository;
@@ -39,17 +41,20 @@ public class IncidentService {
     private final Clock clock;
     private final IncidentMetrics metrics;
     private final ObservationRegistry observations;
+    private final IncidentEventPublisher eventPublisher;
 
     public IncidentService(IncidentRepository incidents,
                            IncidentEventRepository events,
                            Clock clock,
                            IncidentMetrics metrics,
-                           ObservationRegistry observations) {
+                           ObservationRegistry observations,
+                           IncidentEventPublisher eventPublisher) {
         this.incidents = incidents;
         this.events = events;
         this.clock = clock;
         this.metrics = metrics;
         this.observations = observations;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -81,8 +86,31 @@ public class IncidentService {
                     metrics.recordTransition(null, IncidentStatus.DETECTED);
                     log.info("Incident created id={} service={} severity={} environment={}",
                             saved.getId(), service, severity, environment);
+                    // Best-effort publish. On broker outage the event is dropped
+                    // and counted; the DB remains authoritative. See SKILL.md
+                    // for the outbox-pattern follow-up.
+                    eventPublisher.publishDetected(saved);
                     return saved;
                 });
+    }
+
+    /**
+     * Convenience overload used by the alert consumer. The {@code alertId} is
+     * stored as the incident's {@code external_id}, giving us idempotency at
+     * the DB layer: a duplicate alert throws
+     * {@link org.springframework.dao.DataIntegrityViolationException} which
+     * the consumer treats as a benign duplicate.
+     */
+    @Transactional
+    public Incident createFromAlert(AlertPayload alert) {
+        return create(
+                alert.alertId(),
+                alert.service(),
+                alert.title(),
+                alert.description(),
+                alert.severity(),
+                alert.environment()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -155,6 +183,7 @@ public class IncidentService {
                     metrics.recordTransition(previous, target);
                     log.info("Incident transitioned id={} {} -> {} eventType={} actor={}",
                             incident.getId(), previous, target, eventType, actor);
+                    eventPublisher.publishUpdated(incident, previous, target, eventType, actor, now);
                     return incident;
                 });
     }

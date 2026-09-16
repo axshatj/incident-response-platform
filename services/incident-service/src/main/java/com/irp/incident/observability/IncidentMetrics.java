@@ -23,6 +23,11 @@ public class IncidentMetrics {
     private static final String TRANSITIONS = "irp.incident.transitions";
     private static final String ILLEGAL = "irp.incident.illegal_transitions";
 
+    // Phase 3 - eventing
+    private static final String ALERTS_CONSUMED = "irp.alerts.consumed";
+    private static final String EVENTS_PUBLISHED = "irp.events.published";
+    private static final String EVENTS_PUBLISH_FAILED = "irp.events.publish_failed";
+
     private final MeterRegistry registry;
 
     // Cache built counters to avoid re-resolving on every increment.
@@ -51,6 +56,18 @@ public class IncidentMetrics {
                 "from", from.name(),
                 "to", to.name())
                 .increment();
+    }
+
+    public void recordAlertConsumed(String result) {
+        counter(ALERTS_CONSUMED, "result", result).increment();
+    }
+
+    public void recordEventPublished(String eventType) {
+        counter(EVENTS_PUBLISHED, "event_type", eventType).increment();
+    }
+
+    public void recordEventPublishFailed(String eventType) {
+        counter(EVENTS_PUBLISH_FAILED, "event_type", eventType).increment();
     }
 
     private Counter counter(String name, String... tags) {

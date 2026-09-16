@@ -16,6 +16,23 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+  kafka:
+    bootstrap-servers: ${IRP_KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: ${IRP_KAFKA_GROUP:incident-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: RECORD
+      missing-topics-fatal: false
 
 server:
   port: ${IRP_INCIDENT_PORT:8080}
@@ -51,3 +68,6 @@ logging:
 irp:
   cors:
     allowed-origins: ${IRP_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  kafka:
+    partitions: ${IRP_KAFKA_PARTITIONS:3}
+    replicas: ${IRP_KAFKA_REPLICAS:1}
