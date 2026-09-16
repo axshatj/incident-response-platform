@@ -27,7 +27,8 @@ COPY --from=build /workspace/services/incident-service/target/incident-service.j
 USER app
 EXPOSE 8080
 
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseZGC -Djava.security.egd=file:/dev/./urandom"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseZGC -Djava.security.egd=file:/dev/./urandom" \
+    SPRING_PROFILES_ACTIVE=docker
 
 # Actuator liveness/readiness is exposed at /actuator/health/{liveness,readiness}.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=5 \

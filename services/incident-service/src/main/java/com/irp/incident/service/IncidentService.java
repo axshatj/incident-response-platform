@@ -1,16 +1,22 @@
 package com.irp.incident.service;
 
+import com.irp.incident.domain.IllegalIncidentTransitionException;
 import com.irp.incident.domain.Incident;
 import com.irp.incident.domain.IncidentEvent;
 import com.irp.incident.domain.IncidentNotFoundException;
 import com.irp.incident.domain.IncidentStatus;
 import com.irp.incident.domain.Severity;
+import com.irp.incident.observability.IncidentMetrics;
 import com.irp.incident.repository.IncidentEventRepository;
 import com.irp.incident.repository.IncidentRepository;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,16 +32,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class IncidentService {
 
+    private static final Logger log = LoggerFactory.getLogger(IncidentService.class);
+
     private final IncidentRepository incidents;
     private final IncidentEventRepository events;
     private final Clock clock;
+    private final IncidentMetrics metrics;
+    private final ObservationRegistry observations;
 
     public IncidentService(IncidentRepository incidents,
                            IncidentEventRepository events,
-                           Clock clock) {
+                           Clock clock,
+                           IncidentMetrics metrics,
+                           ObservationRegistry observations) {
         this.incidents = incidents;
         this.events = events;
         this.clock = clock;
+        this.metrics = metrics;
+        this.observations = observations;
     }
 
     @Transactional
@@ -45,21 +59,30 @@ public class IncidentService {
                            String description,
                            Severity severity,
                            String environment) {
-        Instant now = clock.instant();
-        Incident incident = new Incident(
-                UUID.randomUUID(),
-                externalId,
-                service,
-                title,
-                description,
-                severity,
-                environment,
-                now
-        );
-        Incident saved = incidents.save(incident);
-        writeEvent(saved.getId(), "INCIDENT_CREATED", null, IncidentStatus.DETECTED,
-                "system", "Incident detected", now);
-        return saved;
+        return Observation.createNotStarted("incident.create", observations)
+                .lowCardinalityKeyValue("severity", severity.name())
+                .lowCardinalityKeyValue("environment", environment)
+                .observe(() -> {
+                    Instant now = clock.instant();
+                    Incident incident = new Incident(
+                            UUID.randomUUID(),
+                            externalId,
+                            service,
+                            title,
+                            description,
+                            severity,
+                            environment,
+                            now
+                    );
+                    Incident saved = incidents.save(incident);
+                    writeEvent(saved.getId(), "INCIDENT_CREATED", null, IncidentStatus.DETECTED,
+                            "system", "Incident detected", now);
+                    metrics.recordCreated(severity, environment);
+                    metrics.recordTransition(null, IncidentStatus.DETECTED);
+                    log.info("Incident created id={} service={} severity={} environment={}",
+                            saved.getId(), service, severity, environment);
+                    return saved;
+                });
     }
 
     @Transactional(readOnly = true)
@@ -112,12 +135,28 @@ public class IncidentService {
                                String eventType,
                                String actor,
                                String note) {
-        Incident incident = incidents.findById(id)
-                .orElseThrow(() -> new IncidentNotFoundException(id));
-        Instant now = clock.instant();
-        IncidentStatus previous = incident.transitionTo(target, now);
-        writeEvent(incident.getId(), eventType, previous, target, actor, note, now);
-        return incident;
+        return Observation.createNotStarted("incident.transition", observations)
+                .lowCardinalityKeyValue("target", target.name())
+                .lowCardinalityKeyValue("eventType", eventType)
+                .observe(() -> {
+                    Incident incident = incidents.findById(id)
+                            .orElseThrow(() -> new IncidentNotFoundException(id));
+                    Instant now = clock.instant();
+                    IncidentStatus previous;
+                    try {
+                        previous = incident.transitionTo(target, now);
+                    } catch (IllegalIncidentTransitionException ex) {
+                        metrics.recordIllegalTransition(ex.getFrom(), ex.getTo());
+                        log.warn("Illegal transition rejected id={} {} -> {} actor={}",
+                                id, ex.getFrom(), ex.getTo(), actor);
+                        throw ex;
+                    }
+                    writeEvent(incident.getId(), eventType, previous, target, actor, note, now);
+                    metrics.recordTransition(previous, target);
+                    log.info("Incident transitioned id={} {} -> {} eventType={} actor={}",
+                            incident.getId(), previous, target, eventType, actor);
+                    return incident;
+                });
     }
 
     private void writeEvent(UUID incidentId,

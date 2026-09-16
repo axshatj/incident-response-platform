@@ -30,8 +30,21 @@ management:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${IRP_ENVIRONMENT:local}
+  tracing:
+    sampling:
+      probability: ${IRP_TRACE_SAMPLE:1.0}
+  otlp:
+    tracing:
+      # OTel Collector OTLP/HTTP receiver. When the collector is not reachable
+      # the exporter logs a warning; the service still runs.
+      endpoint: ${IRP_OTLP_TRACES_ENDPOINT:http://otel-collector:4318/v1/traces}
 
 logging:
+  # logback-spring.xml switches between plain (local dev) and JSON (container).
   level:
     org.hibernate.SQL: INFO
 
