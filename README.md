@@ -19,7 +19,7 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 2
+## Status — Phase 3
 
 Delivered:
 
@@ -28,10 +28,14 @@ Delivered:
 - REST API (`/api/incidents/*`) and React dashboard (Vite + TS + Tailwind)
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics**: `irp_incident_opened_total`, `irp_incident_transitions_total`, `irp_incident_illegal_transitions_total`
+- **Custom domain metrics** for lifecycle and eventing
 - **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
+- **Kafka (KRaft) + Kafka UI** for event-driven processing
+- **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
+- **Retries + DLT**: `DefaultErrorHandler` with `FixedBackOff(2s, 3)` → `telemetry.alerts.DLT`
+- **Idempotent consumer** via `alertId` → `external_id` unique constraint
 
-Next: Phase 3 — Kafka event-driven processing.
+Next: Phase 4 — Spring AI Triage + Investigation Agents (tool calling).
 
 ## Quickstart
 
@@ -49,14 +53,16 @@ npm run dev
 
 Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident-service on port 8080.
 
-### Observability URLs
+### Tool URLs
 
 | Tool | URL | What to look at |
 |------|-----|-----------------|
-| Grafana | http://localhost:3000 | IRP → **Incident Service — Overview** dashboard (anonymous Viewer, or `admin`/`admin`) |
-| Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total` or `http_server_requests_seconds_count` |
-| Jaeger | http://localhost:16686 | Service = `incident-service`, look for `incident.create` and `incident.transition` spans |
-| Actuator | http://localhost:8080/actuator/prometheus | Raw Micrometer output |
+| Dashboard UI | http://localhost:5173 | Incident list, detail, timeline, lifecycle actions |
+| Incident API | http://localhost:8080 | `/api/incidents`, `/actuator/health`, `/actuator/prometheus` |
+| Grafana | http://localhost:3000 | IRP → **Incident Service — Overview** (anonymous Viewer, or `admin`/`admin`) |
+| Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total`, `irp_alerts_consumed_total`, etc. |
+| Jaeger | http://localhost:16686 | Service = `incident-service`, look for `incident.create` / `incident.transition` spans |
+| Kafka UI | http://localhost:8090 | Cluster `irp` — inspect topics `telemetry.alerts`, `incident.detected`, `incident.updated`, `telemetry.alerts.DLT` |
 
 ### Generate traffic to light up the dashboard
 
@@ -74,6 +80,37 @@ for i in {1..10}; do
     -H "Content-Type: application/json" -d '{"actor":"loadgen"}' >/dev/null
 done
 ```
+
+### Inject an alert via Kafka (Phase 3)
+
+The `telemetry.alerts` topic is the canonical ingestion path — the same one a real Alertmanager/webhook bridge would use.
+
+```bash
+# 1. Open a producer shell inside the kafka container
+docker exec -it irp-kafka \
+  kafka-console-producer.sh --broker-list localhost:9092 --topic telemetry.alerts
+
+# 2. Paste one line of JSON (envelope + payload) and press Enter:
+{"eventId":"11111111-1111-1111-1111-111111111111","eventType":"telemetry.alert","schemaVersion":1,"timestamp":"2026-09-16T20:00:00Z","correlationId":"am-42","source":"alertmanager","payload":{"alertId":"am-42","service":"payment-service","title":"DB pool exhausted","description":"p99 > 2s after v42","severity":"SEV2","environment":"prod","labels":{"region":"us-east-1"}}}
+```
+
+Within a second you should see:
+
+- A new incident with `externalId=am-42` on the dashboard
+- An `incident.detected` message on that topic (visible in Kafka UI)
+- Counter `irp_alerts_consumed_total{result="created"}` incremented in Prometheus
+- Sending the same line again increments `irp_alerts_consumed_total{result="duplicate"}` and does **not** create a second incident (idempotent via `external_id`)
+
+To exercise the DLT: send a malformed line (e.g. `{"eventType":"telemetry.alert"}`) — it will retry 3× then land in `telemetry.alerts.DLT`.
+
+### Event topics
+
+| Topic | Direction | Purpose |
+|-------|-----------|---------|
+| `telemetry.alerts` | in | Monitoring systems publish alert envelopes here |
+| `telemetry.alerts.DLT` | in (dead-letter) | Records that failed 4 processing attempts |
+| `incident.detected` | out | Emitted when a new incident is opened |
+| `incident.updated` | out | Emitted on every lifecycle transition |
 
 ### Verify the backend directly
 
@@ -124,6 +161,26 @@ incident-response-platform/
     ├── prometheus/                 # Prometheus scrape config
     └── grafana/                    # Datasource + dashboard provisioning
 ```
+
+## Kafka event model
+
+Every message uses the canonical envelope from [`SKILL.md`](SKILL.md) and
+[`reference/architecture.md`](reference/architecture.md):
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "telemetry.alert",
+  "schemaVersion": 1,
+  "timestamp": "2026-09-16T20:00:00Z",
+  "correlationId": "am-42",
+  "source": "alertmanager",
+  "payload": { "...": "type-specific" }
+}
+```
+
+The `correlationId` becomes the Kafka message key so all messages about a
+single alert / incident land on the same partition and preserve order.
 
 ## Tech Stack
 
