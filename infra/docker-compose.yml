@@ -1,10 +1,14 @@
-# Local dev stack for Phase 1.
+# Local dev stack.
 # Usage (from the repo root):
 #   docker compose -f infra/docker-compose.yml up --build
 #
-# Services:
+# Services (Phase 1 + Phase 2):
 #   postgres          - PostgreSQL 16
-#   incident-service  - Spring Boot 3, exposes 8080
+#   incident-service  - Spring Boot 3, exports OTLP + Prometheus metrics, :8080
+#   otel-collector    - OpenTelemetry Collector (contrib), OTLP receiver, fan-out
+#   jaeger            - all-in-one, OTLP-native, UI :16686
+#   prometheus        - scrapes incident-service and the collector, UI :9090
+#   grafana           - pre-provisioned Prometheus + Jaeger datasources + dashboard, UI :3000
 
 name: irp
 
@@ -27,6 +31,66 @@ services:
       retries: 10
     restart: unless-stopped
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: irp-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4318"          # OTLP/HTTP (internal, exposed only inside compose network)
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    container_name: irp-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      - jaeger
+    ports:
+      - "4317:4317"   # OTLP/gRPC
+      - "4318:4318"   # OTLP/HTTP
+      - "8889:8889"   # Prometheus scrape target (metrics republished)
+      - "8888:8888"   # Collector self-metrics
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: irp-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=6h"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: irp-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
   incident-service:
     build:
       context: ..
@@ -35,15 +99,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     environment:
       IRP_DB_URL: jdbc:postgresql://postgres:5432/irp
       IRP_DB_USER: irp
       IRP_DB_PASSWORD: irp
       IRP_INCIDENT_PORT: 8080
       IRP_CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      IRP_ENVIRONMENT: local
+      IRP_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8080:8080"
     restart: unless-stopped
 
 volumes:
   postgres-data:
+  prometheus-data:
+  grafana-data:

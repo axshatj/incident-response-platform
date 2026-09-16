@@ -1,0 +1,53 @@
+# OpenTelemetry Collector config for local dev.
+# Receives OTLP from the incident-service and fans out:
+#   traces  -> Jaeger (OTLP-native)
+#   metrics -> Prometheus scrape endpoint (:8889)
+#   logs    -> stdout (debug); log aggregation lands in a later phase
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+exporters:
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Preserve service.name and env labels from resource attributes.
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+  telemetry:
+    logs:
+      level: info
