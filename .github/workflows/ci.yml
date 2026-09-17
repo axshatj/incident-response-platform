@@ -45,6 +45,7 @@ jobs:
             services/incident-service/target/surefire-reports/
             services/agent-service/target/surefire-reports/
             services/ops-mcp-server/target/surefire-reports/
+            services/remediation-service/target/surefire-reports/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -115,3 +116,14 @@ jobs:
           cache-from: type=gha,scope:ops-mcp-server
           cache-to: type=gha,mode=max,scope:ops-mcp-server
           tags: irp/ops-mcp-server:ci
+
+      - name: Build remediation-service image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/remediation-service/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope:remediation-service
+          cache-to: type=gha,mode=max,scope:remediation-service
+          tags: irp/remediation-service:ci

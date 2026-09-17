@@ -9,6 +9,7 @@ import com.irp.agent.client.IncidentServiceClient.RootCauseDto;
 import com.irp.agent.client.IncidentServiceClient.ToolCallDto;
 import com.irp.agent.llm.StructuredLlm;
 import com.irp.agent.schema.InvestigationOutput;
+import com.irp.agent.schema.RemediationPlanOutput;
 import com.irp.agent.schema.RootCauseOutput;
 import com.irp.agent.schema.TriageOutput;
 import com.irp.agent.tools.OpsTools;
@@ -25,8 +26,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Runs the investigation loop: triage → bounded tools → RAG retrieve → RCA.
- * Tools and retrieval are deterministic; the LLM only sees compact evidence.
+ * Runs the investigation loop: triage → tools → RAG → RCA → remediation proposal.
+ * The LLM never executes; policy and the remediation-service decide.
  */
 @Service
 public class InvestigationOrchestrator {
@@ -53,6 +54,15 @@ public class InvestigationOrchestrator {
             Return ONLY JSON with keys rootCause, confidence, evidence, counterEvidence, affectedComponents.
             If retrieved knowledge citations are present, include those citation strings in evidence.
             Never present unsupported guesses as facts. If evidence is weak, lower confidence and populate counterEvidence.
+            Do not include markdown.
+            """;
+
+    private static final String REMEDIATION_SYSTEM = """
+            You are the Remediation Planning Agent. Propose ONE structured action.
+            Return ONLY JSON with keys action, namespace, deployment, targetRevision, expectedImpact, blastRadius, confidence, rationale.
+            action must be one of ROLLBACK_DEPLOYMENT, RESTART_POD, RESTART_CONSUMER, SCALE_DEPLOYMENT.
+            Never propose SHELL, KUBECTL, DROP_DATABASE, or IAM changes.
+            This is a proposal only — you do not execute anything.
             Do not include markdown.
             """;
 
@@ -105,6 +115,7 @@ public class InvestigationOrchestrator {
                 RootCauseDto.from(rca)
         ));
         incidents.advance(incidentId, "ROOT_CAUSE_IDENTIFIED", "RCA_GENERATED", "rca-agent", rca.rootCause());
+        proposeRemediation(incident, rca, evidenceBundle, runs);
         log.info("Investigation complete for {} confidence={}", incidentId, rca.confidence());
     }
 
@@ -268,6 +279,40 @@ public class InvestigationOrchestrator {
             return out;
         } catch (RuntimeException e) {
             runs.add(failedRun(runId, "RCA", t0, nano, e.getMessage()));
+            throw e;
+        }
+    }
+
+    private void proposeRemediation(IncidentDto incident,
+                                    RootCauseOutput rca,
+                                    String evidence,
+                                    List<AgentRunDto> runs) {
+        Instant t0 = Instant.now();
+        long nano = System.nanoTime();
+        UUID runId = UUID.randomUUID();
+        try {
+            RemediationPlanOutput plan = llm.generate(REMEDIATION_SYSTEM, """
+                    incidentId=%s
+                    service=%s
+                    environment=%s
+                    rootCause=%s
+                    evidence:
+                    %s
+                    """.formatted(incident.id(), incident.service(), incident.environment(),
+                    rca.rootCause(), evidence), RemediationPlanOutput.class);
+            incidents.postRemediationPlan(incident.id(), new IncidentServiceClient.RemediationPlanDto(
+                    plan.action(),
+                    plan.namespace(),
+                    plan.deployment(),
+                    plan.targetRevision(),
+                    plan.expectedImpact(),
+                    plan.blastRadius(),
+                    plan.confidence(),
+                    plan.rationale()
+            ));
+            runs.add(completedRun(runId, "REMEDIATION_PLAN", t0, nano, List.of()));
+        } catch (RuntimeException e) {
+            runs.add(failedRun(runId, "REMEDIATION_PLAN", t0, nano, e.getMessage()));
             throw e;
         }
     }

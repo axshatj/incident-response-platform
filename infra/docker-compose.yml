@@ -13,6 +13,7 @@
 #   kafka-ui          - Provectus Kafka UI for topic/message inspection, :8090
 #   agent-service     - Spring AI triage + investigation workers, :8081
 #   ops-mcp-server    - read-only Incident Operations MCP (JSON-RPC tools/list + tools/call), :8082
+#   remediation-service - policy-gated simulated Kubernetes executor, :8083
 
 name: irp
 
@@ -212,6 +213,26 @@ services:
       SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8081:8081"
+    restart: unless-stopped
+
+  remediation-service:
+    build:
+      context: ..
+      dockerfile: services/remediation-service/Dockerfile
+    container_name: irp-remediation-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      incident-service:
+        condition: service_healthy
+    environment:
+      IRP_REMEDIATION_PORT: 8083
+      IRP_KAFKA_BOOTSTRAP: kafka:29092
+      IRP_KAFKA_GROUP: remediation-service
+      IRP_INCIDENT_BASE_URL: http://incident-service:8080
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8083:8083"
     restart: unless-stopped
 
 volumes:

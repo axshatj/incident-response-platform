@@ -22,6 +22,7 @@
         <module>services/incident-service</module>
         <module>services/agent-service</module>
         <module>services/ops-mcp-server</module>
+        <module>services/remediation-service</module>
     </modules>
 
     <properties>

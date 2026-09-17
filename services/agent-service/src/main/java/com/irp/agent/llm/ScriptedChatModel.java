@@ -36,6 +36,19 @@ public class ScriptedChatModel implements ChatModel {
                       ]
                     }
                     """;
+        } else if (contains(text, "Remediation Planning")) {
+            json = """
+                    {
+                      "action": "ROLLBACK_DEPLOYMENT",
+                      "namespace": "prod",
+                      "deployment": "payment-service",
+                      "targetRevision": 41,
+                      "expectedImpact": "Restore hikari.maximum-pool-size to 10 and free Postgres connection slots",
+                      "blastRadius": "payment-service production deployment only",
+                      "confidence": 0.88,
+                      "rationale": "v42 raised the pool past Postgres max_connections; rolling back to 41 is reversible"
+                    }
+                    """;
         } else if (contains(text, "Root Cause") || contains(text, "root cause")) {
             boolean cited = contains(text, "RAG") || contains(text, "knowledge/");
             json = """

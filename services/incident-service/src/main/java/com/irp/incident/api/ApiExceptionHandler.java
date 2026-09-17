@@ -2,6 +2,7 @@ package com.irp.incident.api;
 
 import com.irp.incident.domain.IllegalIncidentTransitionException;
 import com.irp.incident.domain.IncidentNotFoundException;
+import com.irp.incident.domain.PolicyRejectedException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,14 @@ public class ApiExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), Map.of(
                 "from", ex.getFrom(),
                 "to", ex.getTo()
+        ));
+    }
+
+    @ExceptionHandler(PolicyRejectedException.class)
+    public ResponseEntity<Map<String, Object>> handlePolicyRejected(PolicyRejectedException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), Map.of(
+                "action", ex.getAction(),
+                "risk", ex.getRisk()
         ));
     }
 

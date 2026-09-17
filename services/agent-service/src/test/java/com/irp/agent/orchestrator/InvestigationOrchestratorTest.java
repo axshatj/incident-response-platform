@@ -13,6 +13,7 @@ import com.irp.agent.client.IncidentServiceClient.InvestigationReport;
 import com.irp.agent.client.IncidentServiceClient.KnowledgeHitDto;
 import com.irp.agent.llm.StructuredLlm;
 import com.irp.agent.schema.InvestigationOutput;
+import com.irp.agent.schema.RemediationPlanOutput;
 import com.irp.agent.schema.RootCauseOutput;
 import com.irp.agent.schema.TriageOutput;
 import com.irp.agent.tools.StubOpsTools;
@@ -69,6 +70,16 @@ class InvestigationOrchestratorTest {
                         "Hikari pool at max; roll back payment-service.",
                         0.87
                 )));
+        when(llm.generate(any(), any(), eq(RemediationPlanOutput.class))).thenReturn(new RemediationPlanOutput(
+                "ROLLBACK_DEPLOYMENT",
+                "prod",
+                "payment-service",
+                41,
+                "restore pool size",
+                "payment-service only",
+                0.88,
+                "roll back v42"
+        ));
 
         orchestrator.handleDetected(id);
 
@@ -83,5 +94,6 @@ class InvestigationOrchestratorTest {
         assertThat(report.getValue().observations()).anyMatch(o -> "KNOWLEDGE".equals(o.type()));
         assertThat(report.getValue().rootCause().evidence())
                 .anyMatch(e -> e.contains("payment-db-pool.md"));
+        verify(incidents).postRemediationPlan(eq(id), any());
     }
 }

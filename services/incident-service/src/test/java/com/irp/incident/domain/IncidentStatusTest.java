@@ -13,6 +13,7 @@ class IncidentStatusTest {
         assertThat(IncidentStatus.INVESTIGATING.canTransitionTo(IncidentStatus.ROOT_CAUSE_IDENTIFIED)).isTrue();
         assertThat(IncidentStatus.ROOT_CAUSE_IDENTIFIED.canTransitionTo(IncidentStatus.REMEDIATION_PROPOSED)).isTrue();
         assertThat(IncidentStatus.REMEDIATION_PROPOSED.canTransitionTo(IncidentStatus.AWAITING_APPROVAL)).isTrue();
+        assertThat(IncidentStatus.REMEDIATION_PROPOSED.canTransitionTo(IncidentStatus.REMEDIATING)).isTrue();
         assertThat(IncidentStatus.AWAITING_APPROVAL.canTransitionTo(IncidentStatus.REMEDIATING)).isTrue();
         assertThat(IncidentStatus.REMEDIATING.canTransitionTo(IncidentStatus.VERIFYING)).isTrue();
         assertThat(IncidentStatus.VERIFYING.canTransitionTo(IncidentStatus.RESOLVED)).isTrue();

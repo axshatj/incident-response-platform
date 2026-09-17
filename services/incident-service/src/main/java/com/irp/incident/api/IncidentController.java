@@ -6,10 +6,14 @@ import com.irp.incident.api.dto.IncidentEventResponse;
 import com.irp.incident.api.dto.IncidentResponse;
 import com.irp.incident.api.dto.InvestigationReportRequest;
 import com.irp.incident.api.dto.InvestigationView;
+import com.irp.incident.api.dto.RemediationExecutionRequest;
+import com.irp.incident.api.dto.RemediationPlanRequest;
+import com.irp.incident.api.dto.RemediationView;
 import com.irp.incident.api.dto.TransitionRequest;
 import com.irp.incident.domain.Incident;
 import com.irp.incident.service.IncidentService;
 import com.irp.incident.service.InvestigationService;
+import com.irp.incident.service.RemediationCoordinator;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -30,10 +34,14 @@ public class IncidentController {
 
     private final IncidentService incidents;
     private final InvestigationService investigations;
+    private final RemediationCoordinator remediations;
 
-    public IncidentController(IncidentService incidents, InvestigationService investigations) {
+    public IncidentController(IncidentService incidents,
+                              InvestigationService investigations,
+                              RemediationCoordinator remediations) {
         this.incidents = incidents;
         this.investigations = investigations;
+        this.remediations = remediations;
     }
 
     @GetMapping
@@ -79,7 +87,7 @@ public class IncidentController {
                                     @Valid @RequestBody(required = false) TransitionRequest request) {
         TransitionRequest safe = request == null ? new TransitionRequest(null, null) : request;
         return IncidentResponse.from(
-                incidents.approve(id, safe.actorOr(ANONYMOUS_ACTOR), safe.note()));
+                remediations.approve(id, safe.actorOr(ANONYMOUS_ACTOR), safe.note()));
     }
 
     @PostMapping("/{id}/reject")
@@ -87,7 +95,7 @@ public class IncidentController {
                                    @Valid @RequestBody(required = false) TransitionRequest request) {
         TransitionRequest safe = request == null ? new TransitionRequest(null, null) : request;
         return IncidentResponse.from(
-                incidents.reject(id, safe.actorOr(ANONYMOUS_ACTOR), safe.note()));
+                remediations.reject(id, safe.actorOr(ANONYMOUS_ACTOR), safe.note()));
     }
 
     @PostMapping("/{id}/resolve")
@@ -130,5 +138,22 @@ public class IncidentController {
     @GetMapping("/{id}/investigation")
     public InvestigationView investigation(@PathVariable UUID id) {
         return investigations.view(id);
+    }
+
+    @PostMapping("/{id}/remediation-plan")
+    public RemediationView proposeRemediation(@PathVariable UUID id,
+                                              @Valid @RequestBody RemediationPlanRequest request) {
+        return remediations.propose(id, request);
+    }
+
+    @GetMapping("/{id}/remediation")
+    public RemediationView remediation(@PathVariable UUID id) {
+        return remediations.view(id);
+    }
+
+    @PostMapping("/{id}/remediation-executions")
+    public RemediationView recordExecution(@PathVariable UUID id,
+                                           @Valid @RequestBody RemediationExecutionRequest request) {
+        return remediations.recordExecution(id, request);
     }
 }

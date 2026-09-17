@@ -19,29 +19,31 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 6
+## Status — Phase 7
 
 Delivered:
 
 - Incident Service (Spring Boot 3, Java 21) with immutable state-machine + audit trail
 - PostgreSQL 16 + **pgvector** via Docker Compose
-- REST API (`/api/incidents/*`, `/api/knowledge/search`) and React dashboard (Vite + TS + Tailwind)
+- REST API (`/api/incidents/*`, `/api/knowledge/search`, remediation plan/execution) and React dashboard
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics** for lifecycle, eventing, RAG, and MCP tool calls
+- **Custom domain metrics** for lifecycle, eventing, RAG, MCP, and remediation
 - **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
 - **Kafka (KRaft) + Kafka UI** for event-driven processing
 - **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
 - **Retries + DLT**: `DefaultErrorHandler` with `FixedBackOff(2s, 3)` → `telemetry.alerts.DLT`
 - **Idempotent consumer** via `alertId` → `external_id` unique constraint
-- **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA
+- **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA / Remediation plan
 - **Ops MCP server**: JSON-RPC `initialize` / `tools/list` / `tools/call` over HTTP; read-only allowlist (no shell / kubectl)
 - **MCP client** in agent-service: tools are invoked remotely, not in-process
 - **RAG**: seeded runbooks / architecture / past incidents / policies; hybrid retrieve (hash embeddings + metadata filter + top-K snippets)
+- **Policy engine**: LOW auto-execute, HIGH requires approval, CRITICAL prohibited
+- **Remediation service**: deterministic simulated Kubernetes rollback with namespace/deployment/revision allowlists and idempotency keys
 - **Stub LLM** by default so the MVP path runs without an API key
-- Dashboard shows observations, cited knowledge, agent runs, tool calls, and root-cause evidence
+- Dashboard shows observations, cited knowledge, proposed rollback, and execution audit
 
-Next: Phase 7 — Remediation (policy engine, approval, K8s executor).
+Next: Phase 8 — Verification (recovery checks, bounded retry/escalation).
 
 ## Quickstart
 
@@ -78,6 +80,7 @@ Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident
 | Kafka UI | http://localhost:8090 | Cluster `irp` — inspect topics `telemetry.alerts`, `incident.detected`, `incident.updated`, `telemetry.alerts.DLT` |
 | Agent API | http://localhost:8081 | `/actuator/health` — consumes `incident.detected` and writes investigation artifacts |
 | Ops MCP | http://localhost:8082 | `GET /mcp/tools`, `POST /mcp` JSON-RPC (`tools/list`, `tools/call`) |
+| Remediation API | http://localhost:8083 | `/actuator/health` — executes approved rollbacks |
 
 ### Generate traffic to light up the dashboard
 
@@ -115,7 +118,7 @@ Within a second you should see:
 - An `incident.detected` message on that topic (visible in Kafka UI)
 - Counter `irp_alerts_consumed_total{result="created"}` incremented in Prometheus
 - Sending the same line again increments `irp_alerts_consumed_total{result="duplicate"}` and does **not** create a second incident (idempotent via `external_id`)
-- The agent-service consumes `incident.detected`, runs triage + bounded tools + RAG + RCA (stub LLM by default), and advances the incident to `ROOT_CAUSE_IDENTIFIED`
+- The agent-service consumes `incident.detected`, runs triage + bounded tools + RAG + RCA + a **rollback proposal**, and leaves the incident in `AWAITING_APPROVAL` (HIGH risk)
 - Retrieved runbooks appear as **Cited knowledge** observations on the incident detail page
 
 To exercise the DLT: send a malformed line (e.g. `{"eventType":"telemetry.alert"}`) — it will retry 3× then land in `telemetry.alerts.DLT`.
@@ -140,6 +143,17 @@ curl -sS http://localhost:8082/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"shell","arguments":{"service":"payment-service"}}}'
 ```
+
+### Approve a rollback (Phase 7)
+
+After an alert-driven investigation the dashboard shows a `ROLLBACK_DEPLOYMENT` plan at risk **HIGH**. Approve it:
+
+```bash
+curl -sS -X POST "http://localhost:8080/api/incidents/<id>/approve" \
+  -H "Content-Type: application/json" -d '{"actor":"you","note":"approved rollback to r41"}'
+```
+
+The remediation-service then performs a simulated Kubernetes rollback (`prod/payment-service` 42 → 41) and the incident moves to `VERIFYING`. `SHELL` / `DROP_DATABASE` proposals are rejected with HTTP 403 before any executor runs.
 
 ### Event topics
 
@@ -193,9 +207,10 @@ incident-response-platform/
 ├── pom.xml                         # Parent Maven multi-module
 ├── mvnw, mvnw.cmd, .mvn/           # Maven wrapper
 ├── services/
-│   ├── incident-service/           # Lifecycle, Kafka consumers, investigation store, RAG
+│   ├── incident-service/           # Lifecycle, Kafka consumers, investigation store, RAG, policy
 │   ├── agent-service/              # Spring AI triage + investigation (stub LLM by default)
-│   └── ops-mcp-server/             # Read-only Incident Operations MCP (JSON-RPC over HTTP)
+│   ├── ops-mcp-server/             # Read-only Incident Operations MCP (JSON-RPC over HTTP)
+│   └── remediation-service/        # Deterministic Kubernetes executor (simulated cluster)
 ├── ui/                             # React dashboard (Vite + TS + Tailwind)
 └── infra/
     ├── docker-compose.yml          # Full local stack

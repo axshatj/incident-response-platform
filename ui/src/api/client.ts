@@ -87,6 +87,40 @@ export interface RootCauseView {
   createdAt: string;
 }
 
+export interface RemediationView {
+  incidentId: string;
+  plan: RemediationPlanView | null;
+  executions: RemediationExecutionView[];
+}
+
+export interface RemediationPlanView {
+  id: string;
+  action: string;
+  namespace: string;
+  deployment: string;
+  targetRevision: number;
+  risk: string;
+  decision: string;
+  status: string;
+  idempotencyKey: string;
+  expectedImpact: string | null;
+  blastRadius: string | null;
+  confidence: number | null;
+  rationale: string | null;
+  createdAt: string;
+}
+
+export interface RemediationExecutionView {
+  id: string;
+  planId: string | null;
+  idempotencyKey: string;
+  status: string;
+  resultPreview: string | null;
+  errorMessage: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
 export interface CreateIncidentRequest {
   externalId?: string | null;
   service: string;
@@ -123,6 +157,7 @@ export const api = {
   getIncident: (id: string) => request<Incident>(`/incidents/${id}`),
   getTimeline: (id: string) => request<IncidentEvent[]>(`/incidents/${id}/events`),
   getInvestigation: (id: string) => request<InvestigationView>(`/incidents/${id}/investigation`),
+  getRemediation: (id: string) => request<RemediationView>(`/incidents/${id}/remediation`),
   acknowledge: (id: string, actor?: string, note?: string) =>
     request<Incident>(`/incidents/${id}/acknowledge`, {
       method: "POST",

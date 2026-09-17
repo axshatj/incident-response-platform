@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: remediation-service
+  kafka:
+    bootstrap-servers: ${IRP_KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: ${IRP_KAFKA_GROUP:remediation-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: RECORD
+      missing-topics-fatal: false
+
+server:
+  port: ${IRP_REMEDIATION_PORT:8083}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+irp:
+  incident-service:
+    base-url: ${IRP_INCIDENT_BASE_URL:http://localhost:8080}

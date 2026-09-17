@@ -28,6 +28,9 @@ public class IncidentMetrics {
     private static final String EVENTS_PUBLISHED = "irp.events.published";
     private static final String EVENTS_PUBLISH_FAILED = "irp.events.publish_failed";
     private static final String RAG_RETRIEVED = "irp.rag.retrieved";
+    private static final String REMEDIATION_PROPOSED = "irp.remediation.proposed";
+    private static final String REMEDIATION_PROHIBITED = "irp.remediation.prohibited";
+    private static final String REMEDIATION_EXECUTED = "irp.remediation.executed";
 
     private final MeterRegistry registry;
 
@@ -73,6 +76,18 @@ public class IncidentMetrics {
 
     public void recordRagRetrieved(int documentCount) {
         counter(RAG_RETRIEVED).increment(documentCount);
+    }
+
+    public void recordRemediationProposed(String risk) {
+        counter(REMEDIATION_PROPOSED, "risk", risk).increment();
+    }
+
+    public void recordRemediationProhibited(String action) {
+        counter(REMEDIATION_PROHIBITED, "action", action).increment();
+    }
+
+    public void recordRemediationExecuted(String result) {
+        counter(REMEDIATION_EXECUTED, "result", result).increment();
     }
 
     private Counter counter(String name, String... tags) {

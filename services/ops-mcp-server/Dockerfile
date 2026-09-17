@@ -7,6 +7,7 @@ COPY pom.xml pom.xml
 COPY services/incident-service/pom.xml services/incident-service/pom.xml
 COPY services/agent-service/pom.xml services/agent-service/pom.xml
 COPY services/ops-mcp-server/pom.xml services/ops-mcp-server/pom.xml
+COPY services/remediation-service/pom.xml services/remediation-service/pom.xml
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -q -pl services/ops-mcp-server -am dependency:go-offline
 

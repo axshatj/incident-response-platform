@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type Incident, type IncidentEvent, type InvestigationView } from "../api/client";
+import { api, type Incident, type IncidentEvent, type InvestigationView, type RemediationView } from "../api/client";
 import SeverityBadge from "../components/SeverityBadge";
 import StatusBadge from "../components/StatusBadge";
 
@@ -30,20 +30,23 @@ export default function IncidentDetail() {
   const [incident, setIncident] = useState<Incident | null>(null);
   const [timeline, setTimeline] = useState<IncidentEvent[]>([]);
   const [investigation, setInvestigation] = useState<InvestigationView | null>(null);
+  const [remediation, setRemediation] = useState<RemediationView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [i, t, inv] = await Promise.all([
+      const [i, t, inv, rem] = await Promise.all([
         api.getIncident(id),
         api.getTimeline(id),
         api.getInvestigation(id).catch(() => null),
+        api.getRemediation(id).catch(() => null),
       ]);
       setIncident(i);
       setTimeline(t);
       setInvestigation(inv);
+      setRemediation(rem);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -156,6 +159,36 @@ export default function IncidentDetail() {
             <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-300">
               {parseJsonList(investigation.rootCause.evidenceJson).map((item) => (
                 <li key={item}>{item}</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {remediation?.plan && (
+        <section className="card">
+          <h2 className="mb-3 text-lg font-semibold">Proposed remediation</h2>
+          <p className="text-sm font-medium">
+            {remediation.plan.action} · {remediation.plan.namespace}/{remediation.plan.deployment} @ r
+            {remediation.plan.targetRevision}
+          </p>
+          <p className="mt-2 text-xs uppercase text-slate-500">
+            risk {remediation.plan.risk} · {remediation.plan.decision} · {remediation.plan.status}
+          </p>
+          {remediation.plan.rationale && (
+            <p className="mt-2 text-sm text-slate-300">{remediation.plan.rationale}</p>
+          )}
+          {remediation.plan.expectedImpact && (
+            <p className="mt-1 text-xs text-slate-500">Impact: {remediation.plan.expectedImpact}</p>
+          )}
+          {remediation.executions.length > 0 && (
+            <ul className="mt-3 space-y-1 text-sm text-slate-300">
+              {remediation.executions.map((ex) => (
+                <li key={ex.id}>
+                  {ex.status}
+                  {ex.resultPreview ? ` — ${ex.resultPreview}` : ""}
+                  {ex.errorMessage ? ` — ${ex.errorMessage}` : ""}
+                </li>
               ))}
             </ul>
           )}

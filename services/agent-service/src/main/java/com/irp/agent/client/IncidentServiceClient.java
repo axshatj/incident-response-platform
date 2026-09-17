@@ -73,6 +73,15 @@ public class IncidentServiceClient {
         return hits == null ? List.of() : hits;
     }
 
+    public void postRemediationPlan(UUID incidentId, RemediationPlanDto plan) {
+        http.post()
+                .uri("/api/incidents/{id}/remediation-plan", incidentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(plan)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     public record IncidentDto(
             UUID id,
             String externalId,
@@ -156,6 +165,17 @@ public class IncidentServiceClient {
             return "[" + source + ":" + path + "] " + title;
         }
     }
+
+    public record RemediationPlanDto(
+            String action,
+            String namespace,
+            String deployment,
+            Integer targetRevision,
+            String expectedImpact,
+            String blastRadius,
+            Double confidence,
+            String rationale
+    ) {}
 
     public static String noteFor(TriageOutput triage) {
         return "suspected=" + String.join(",", triage.suspectedServices());
