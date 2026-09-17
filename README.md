@@ -19,7 +19,7 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 3
+## Status — Phase 4
 
 Delivered:
 
@@ -34,8 +34,12 @@ Delivered:
 - **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
 - **Retries + DLT**: `DefaultErrorHandler` with `FixedBackOff(2s, 3)` → `telemetry.alerts.DLT`
 - **Idempotent consumer** via `alertId` → `external_id` unique constraint
+- **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA
+- **Deterministic tools first**: allowlisted `query_metrics`, `query_logs`, `query_traces`, `get_deployment_history`, `get_database_metrics` (no shell / kubectl)
+- **Stub LLM** by default so the MVP path runs without an API key
+- Dashboard shows observations, agent runs, tool calls, and root-cause
 
-Next: Phase 4 — Spring AI Triage + Investigation Agents (tool calling).
+Next: Phase 5 — RAG (pgvector, runbooks, evidence retrieval).
 
 ## Quickstart
 
@@ -63,6 +67,7 @@ Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident
 | Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total`, `irp_alerts_consumed_total`, etc. |
 | Jaeger | http://localhost:16686 | Service = `incident-service`, look for `incident.create` / `incident.transition` spans |
 | Kafka UI | http://localhost:8090 | Cluster `irp` — inspect topics `telemetry.alerts`, `incident.detected`, `incident.updated`, `telemetry.alerts.DLT` |
+| Agent API | http://localhost:8081 | `/actuator/health` — consumes `incident.detected` and writes investigation artifacts |
 
 ### Generate traffic to light up the dashboard
 
@@ -100,6 +105,7 @@ Within a second you should see:
 - An `incident.detected` message on that topic (visible in Kafka UI)
 - Counter `irp_alerts_consumed_total{result="created"}` incremented in Prometheus
 - Sending the same line again increments `irp_alerts_consumed_total{result="duplicate"}` and does **not** create a second incident (idempotent via `external_id`)
+- The agent-service consumes `incident.detected`, runs triage + bounded tools + RCA (stub LLM by default), and advances the incident to `ROOT_CAUSE_IDENTIFIED`
 
 To exercise the DLT: send a malformed line (e.g. `{"eventType":"telemetry.alert"}`) — it will retry 3× then land in `telemetry.alerts.DLT`.
 
@@ -109,8 +115,10 @@ To exercise the DLT: send a malformed line (e.g. `{"eventType":"telemetry.alert"
 |-------|-----------|---------|
 | `telemetry.alerts` | in | Monitoring systems publish alert envelopes here |
 | `telemetry.alerts.DLT` | in (dead-letter) | Records that failed 4 processing attempts |
-| `incident.detected` | out | Emitted when a new incident is opened |
+| `incident.detected` | out | Emitted when a new incident is opened (agent-service consumes this) |
 | `incident.updated` | out | Emitted on every lifecycle transition |
+| `investigation.requested` | out | Reserved for explicit re-investigation |
+| `investigation.completed` | out | Reserved for agent completion events |
 
 ### Verify the backend directly
 
@@ -153,7 +161,8 @@ incident-response-platform/
 ├── pom.xml                         # Parent Maven multi-module
 ├── mvnw, mvnw.cmd, .mvn/           # Maven wrapper
 ├── services/
-│   └── incident-service/           # Spring Boot service (Phase 1)
+│   ├── incident-service/           # Lifecycle, Kafka consumers, investigation store
+│   └── agent-service/              # Spring AI triage + investigation (stub LLM by default)
 ├── ui/                             # React dashboard (Vite + TS + Tailwind)
 └── infra/
     ├── docker-compose.yml          # Full local stack

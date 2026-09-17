@@ -18,7 +18,7 @@ jobs:
   backend:
     name: Backend (Maven + JUnit)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,14 +34,16 @@ jobs:
         run: chmod +x ./mvnw
 
       - name: Verify (compile + tests)
-        run: ./mvnw -B -ntp -pl services/incident-service -am verify
+        run: ./mvnw -B -ntp verify
 
       - name: Upload Surefire reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: services/incident-service/target/surefire-reports/
+          path: |
+            services/incident-service/target/surefire-reports/
+            services/agent-service/target/surefire-reports/
           if-no-files-found: ignore
           retention-days: 7
 
@@ -70,9 +72,9 @@ jobs:
         run: npm run build
 
   docker:
-    name: Docker (incident-service image build)
+    name: Docker (service image builds)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -80,13 +82,24 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (no push)
+      - name: Build incident-service image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: services/incident-service/Dockerfile
           push: false
           load: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope:incident-service
+          cache-to: type=gha,mode=max,scope:incident-service
           tags: irp/incident-service:ci
+
+      - name: Build agent-service image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/agent-service/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha,scope:agent-service
+          cache-to: type=gha,mode=max,scope:agent-service
+          tags: irp/agent-service:ci

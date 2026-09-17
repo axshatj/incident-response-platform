@@ -62,6 +62,18 @@ public class KafkaConfig {
     }
 
     @Bean
+    NewTopic investigationRequestedTopic() {
+        return TopicBuilder.name(KafkaTopics.INVESTIGATION_REQUESTED)
+                .partitions(partitions).replicas(replicas).build();
+    }
+
+    @Bean
+    NewTopic investigationCompletedTopic() {
+        return TopicBuilder.name(KafkaTopics.INVESTIGATION_COMPLETED)
+                .partitions(partitions).replicas(replicas).build();
+    }
+
+    @Bean
     DefaultErrorHandler defaultErrorHandler(KafkaOperations<Object, Object> template) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
                 template,

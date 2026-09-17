@@ -7,6 +7,7 @@ WORKDIR /workspace
 # Copy just the poms first to leverage Docker layer caching for dependencies.
 COPY pom.xml pom.xml
 COPY services/incident-service/pom.xml services/incident-service/pom.xml
+COPY services/agent-service/pom.xml services/agent-service/pom.xml
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -q -pl services/incident-service -am dependency:go-offline
 

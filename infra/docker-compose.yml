@@ -11,6 +11,7 @@
 #   grafana           - pre-provisioned Prometheus + Jaeger datasources + dashboard, UI :3000
 #   kafka             - Kafka 3.7 in KRaft mode (no ZooKeeper), :9092 host / :29092 in-network
 #   kafka-ui          - Provectus Kafka UI for topic/message inspection, :8090
+#   agent-service     - Spring AI triage + investigation workers, :8081
 
 name: irp
 
@@ -161,6 +162,33 @@ services:
       SPRING_PROFILES_ACTIVE: docker
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  agent-service:
+    build:
+      context: ..
+      dockerfile: services/agent-service/Dockerfile
+    container_name: irp-agent-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      incident-service:
+        condition: service_healthy
+    environment:
+      IRP_AGENT_PORT: 8081
+      IRP_KAFKA_BOOTSTRAP: kafka:29092
+      IRP_KAFKA_GROUP: agent-service
+      IRP_INCIDENT_BASE_URL: http://incident-service:8080
+      IRP_AGENT_LLM: stub
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8081:8081"
     restart: unless-stopped
 
 volumes:

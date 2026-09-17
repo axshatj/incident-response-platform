@@ -24,6 +24,7 @@ export interface Incident {
   environment: string;
   detectedAt: string;
   resolvedAt: string | null;
+  rootCauseId: string | null;
 }
 
 export interface IncidentEvent {
@@ -35,6 +36,55 @@ export interface IncidentEvent {
   actor: string | null;
   note: string | null;
   occurredAt: string;
+}
+
+export interface InvestigationView {
+  incidentId: string;
+  observations: ObservationView[];
+  agentRuns: AgentRunView[];
+  rootCause: RootCauseView | null;
+}
+
+export interface ObservationView {
+  id: string;
+  type: string;
+  source: string;
+  observedAt: string;
+  content: string;
+  confidence: number | null;
+  traceId: string | null;
+}
+
+export interface AgentRunView {
+  id: string;
+  agentType: string;
+  model: string | null;
+  status: string;
+  latencyMs: number | null;
+  errorMessage: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  toolCalls: ToolCallView[];
+}
+
+export interface ToolCallView {
+  id: string;
+  toolName: string;
+  status: string;
+  latencyMs: number | null;
+  resultPreview: string | null;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export interface RootCauseView {
+  id: string;
+  statement: string;
+  confidence: number;
+  evidenceJson: string;
+  counterEvidenceJson: string;
+  affectedJson: string;
+  createdAt: string;
 }
 
 export interface CreateIncidentRequest {
@@ -72,6 +122,7 @@ export const api = {
     request<Incident>("/incidents", { method: "POST", body: JSON.stringify(body) }),
   getIncident: (id: string) => request<Incident>(`/incidents/${id}`),
   getTimeline: (id: string) => request<IncidentEvent[]>(`/incidents/${id}/events`),
+  getInvestigation: (id: string) => request<InvestigationView>(`/incidents/${id}/investigation`),
   acknowledge: (id: string, actor?: string, note?: string) =>
     request<Incident>(`/incidents/${id}/acknowledge`, {
       method: "POST",

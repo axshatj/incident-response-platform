@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: agent-service
+  kafka:
+    bootstrap-servers: ${IRP_KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: ${IRP_KAFKA_GROUP:agent-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: RECORD
+      missing-topics-fatal: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+
+server:
+  port: ${IRP_AGENT_PORT:8081}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+irp:
+  incident-service:
+    base-url: ${IRP_INCIDENT_BASE_URL:http://localhost:8080}
+  agent:
+    llm:
+      provider: ${IRP_AGENT_LLM:stub}
+    budget:
+      max-tool-calls: ${IRP_AGENT_MAX_TOOLS:8}
+      max-latency-ms: ${IRP_AGENT_MAX_LATENCY_MS:30000}

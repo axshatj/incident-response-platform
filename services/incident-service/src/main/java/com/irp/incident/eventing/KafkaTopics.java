@@ -10,4 +10,6 @@ public final class KafkaTopics {
 
     public static final String INCIDENT_DETECTED = "incident.detected";
     public static final String INCIDENT_UPDATED = "incident.updated";
+    public static final String INVESTIGATION_REQUESTED = "investigation.requested";
+    public static final String INVESTIGATION_COMPLETED = "investigation.completed";
 }

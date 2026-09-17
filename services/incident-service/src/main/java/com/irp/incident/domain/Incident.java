@@ -52,6 +52,9 @@ public class Incident {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
+    @Column(name = "root_cause_id")
+    private UUID rootCauseId;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -89,7 +92,12 @@ public class Incident {
     public String getEnvironment() { return environment; }
     public Instant getDetectedAt() { return detectedAt; }
     public Instant getResolvedAt() { return resolvedAt; }
+    public UUID getRootCauseId() { return rootCauseId; }
     public Long getVersion() { return version; }
+
+    public void attachRootCause(UUID rootCauseId) {
+        this.rootCauseId = rootCauseId;
+    }
 
     /**
      * Attempts to move this incident into {@code target}. Throws

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type Incident, type IncidentEvent } from "../api/client";
+import { api, type Incident, type IncidentEvent, type InvestigationView } from "../api/client";
 import SeverityBadge from "../components/SeverityBadge";
 import StatusBadge from "../components/StatusBadge";
 
@@ -17,15 +17,21 @@ export default function IncidentDetail() {
   const { id = "" } = useParams<{ id: string }>();
   const [incident, setIncident] = useState<Incident | null>(null);
   const [timeline, setTimeline] = useState<IncidentEvent[]>([]);
+  const [investigation, setInvestigation] = useState<InvestigationView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [i, t] = await Promise.all([api.getIncident(id), api.getTimeline(id)]);
+      const [i, t, inv] = await Promise.all([
+        api.getIncident(id),
+        api.getTimeline(id),
+        api.getInvestigation(id).catch(() => null),
+      ]);
       setIncident(i);
       setTimeline(t);
+      setInvestigation(inv);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -126,6 +132,59 @@ export default function IncidentDetail() {
           ))}
         </div>
       </section>
+
+      {investigation?.rootCause && (
+        <section className="card">
+          <h2 className="mb-3 text-lg font-semibold">Root cause</h2>
+          <p className="text-sm">{investigation.rootCause.statement}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            confidence {(investigation.rootCause.confidence * 100).toFixed(0)}%
+          </p>
+        </section>
+      )}
+
+      {investigation && investigation.observations.length > 0 && (
+        <section className="card">
+          <h2 className="mb-3 text-lg font-semibold">Observations</h2>
+          <ul className="space-y-2 text-sm">
+            {investigation.observations.map((o) => (
+              <li key={o.id} className="rounded border border-border p-2">
+                <div className="text-xs uppercase text-slate-500">
+                  {o.source} · {o.type}
+                </div>
+                <p className="mt-1 text-slate-200">{o.content}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {investigation && investigation.agentRuns.length > 0 && (
+        <section className="card">
+          <h2 className="mb-3 text-lg font-semibold">Agent runs</h2>
+          <ul className="space-y-3 text-sm">
+            {investigation.agentRuns.map((run) => (
+              <li key={run.id}>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{run.agentType}</span>
+                  <span className="text-xs text-slate-500">
+                    {run.status} {run.latencyMs != null ? `· ${run.latencyMs}ms` : ""}
+                  </span>
+                </div>
+                {run.toolCalls.length > 0 && (
+                  <ul className="mt-1 space-y-1 text-xs text-slate-400">
+                    {run.toolCalls.map((tc) => (
+                      <li key={tc.id}>
+                        {tc.toolName} → {tc.status}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="mb-3 text-lg font-semibold">Timeline</h2>

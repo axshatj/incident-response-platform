@@ -12,6 +12,7 @@ credentials.json
 *.swp
 Thumbs.db
 .DS_Store
+*.ica
 
 # Java / Maven
 target/

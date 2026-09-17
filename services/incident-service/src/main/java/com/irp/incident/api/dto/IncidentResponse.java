@@ -16,7 +16,8 @@ public record IncidentResponse(
         IncidentStatus status,
         String environment,
         Instant detectedAt,
-        Instant resolvedAt
+        Instant resolvedAt,
+        UUID rootCauseId
 ) {
     public static IncidentResponse from(Incident incident) {
         return new IncidentResponse(
@@ -29,7 +30,8 @@ public record IncidentResponse(
                 incident.getStatus(),
                 incident.getEnvironment(),
                 incident.getDetectedAt(),
-                incident.getResolvedAt()
+                incident.getResolvedAt(),
+                incident.getRootCauseId()
         );
     }
 }

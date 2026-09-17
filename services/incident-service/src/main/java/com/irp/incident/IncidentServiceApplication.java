@@ -10,3 +10,4 @@ public class IncidentServiceApplication {
         SpringApplication.run(IncidentServiceApplication.class, args);
     }
 }
+

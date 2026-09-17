@@ -14,6 +14,7 @@ public final class EventTypes {
     // Outbound
     public static final String INCIDENT_DETECTED = "incident.detected";
     public static final String INCIDENT_UPDATED = "incident.updated";
+    public static final String INVESTIGATION_COMPLETED = "investigation.completed";
 
     public static final String SOURCE_INCIDENT_SERVICE = "incident-service";
 }

@@ -1,11 +1,15 @@
 package com.irp.incident.api;
 
+import com.irp.incident.api.dto.AgentAdvanceRequest;
 import com.irp.incident.api.dto.CreateIncidentRequest;
 import com.irp.incident.api.dto.IncidentEventResponse;
 import com.irp.incident.api.dto.IncidentResponse;
+import com.irp.incident.api.dto.InvestigationReportRequest;
+import com.irp.incident.api.dto.InvestigationView;
 import com.irp.incident.api.dto.TransitionRequest;
 import com.irp.incident.domain.Incident;
 import com.irp.incident.service.IncidentService;
+import com.irp.incident.service.InvestigationService;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -25,9 +29,11 @@ public class IncidentController {
     private static final String ANONYMOUS_ACTOR = "anonymous";
 
     private final IncidentService incidents;
+    private final InvestigationService investigations;
 
-    public IncidentController(IncidentService incidents) {
+    public IncidentController(IncidentService incidents, InvestigationService investigations) {
         this.incidents = incidents;
+        this.investigations = investigations;
     }
 
     @GetMapping
@@ -90,5 +96,39 @@ public class IncidentController {
         TransitionRequest safe = request == null ? new TransitionRequest(null, null) : request;
         return IncidentResponse.from(
                 incidents.resolve(id, safe.actorOr(ANONYMOUS_ACTOR), safe.note()));
+    }
+
+    /**
+     * Agent-driven state machine advance. Still validated by
+     * {@link com.irp.incident.domain.IncidentStatus}; this is not a bypass.
+     */
+    @PostMapping("/{id}/advance")
+    public IncidentResponse advance(@PathVariable UUID id,
+                                    @Valid @RequestBody AgentAdvanceRequest request) {
+        return IncidentResponse.from(incidents.transition(
+                id,
+                request.target(),
+                request.eventType(),
+                request.actorOr("agent-service"),
+                request.note()
+        ));
+    }
+
+    @PostMapping("/{id}/investigations")
+    public ResponseEntity<java.util.Map<String, UUID>> startInvestigation(@PathVariable UUID id) {
+        var investigation = investigations.start(id);
+        return ResponseEntity.ok(java.util.Map.of("investigationId", investigation.getId()));
+    }
+
+    @PostMapping("/{id}/investigation-report")
+    public ResponseEntity<Void> recordInvestigation(@PathVariable UUID id,
+                                                    @Valid @RequestBody InvestigationReportRequest report) {
+        investigations.recordReport(id, report);
+        return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/{id}/investigation")
+    public InvestigationView investigation(@PathVariable UUID id) {
+        return investigations.view(id);
     }
 }
