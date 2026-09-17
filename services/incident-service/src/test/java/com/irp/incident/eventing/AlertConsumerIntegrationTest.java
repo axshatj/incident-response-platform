@@ -3,7 +3,6 @@ package com.irp.incident.eventing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.irp.incident.domain.Severity;
 import com.irp.incident.repository.IncidentRepository;
 import java.time.Duration;
@@ -59,7 +58,6 @@ class AlertConsumerIntegrationTest {
 
     @Autowired KafkaTemplate<String, Object> template;
     @Autowired IncidentRepository incidents;
-    @Autowired ObjectMapper mapper;
 
     @Test
     void alertBecomesIncidentAndEmitsDownstreamEvent() throws Exception {
@@ -80,8 +78,10 @@ class AlertConsumerIntegrationTest {
         try (KafkaConsumer<String, String> downstream = downstreamConsumer("dl-" + alertId)) {
             downstream.subscribe(java.util.List.of(KafkaTopics.INCIDENT_DETECTED));
 
-            template.send(KafkaTopics.TELEMETRY_ALERTS, alertId, mapper.writeValueAsString(envelope))
-                    .get();
+            // Send the envelope object directly; JsonSerializer on the producer
+            // handles the encoding. Passing a pre-serialized String here would
+            // double-encode the payload.
+            template.send(KafkaTopics.TELEMETRY_ALERTS, alertId, envelope).get();
 
             // 1. Incident row created.
             await().atMost(Duration.ofSeconds(20)).untilAsserted(() ->
@@ -104,8 +104,7 @@ class AlertConsumerIntegrationTest {
         }
 
         // 3. Duplicate alert is ignored (still exactly one incident).
-        template.send(KafkaTopics.TELEMETRY_ALERTS, alertId, mapper.writeValueAsString(envelope))
-                .get();
+        template.send(KafkaTopics.TELEMETRY_ALERTS, alertId, envelope).get();
         // Give the consumer a moment to attempt processing.
         Thread.sleep(2_000);
         long count = incidents.findAllByOrderByDetectedAtDesc().stream()
