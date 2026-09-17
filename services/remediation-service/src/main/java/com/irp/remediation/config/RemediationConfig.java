@@ -10,6 +10,10 @@ public class RemediationConfig {
 
     @Bean
     RestClient incidentRestClient(@Value("${irp.incident-service.base-url}") String baseUrl) {
-        return RestClient.builder().baseUrl(baseUrl).build();
+        return RestClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("X-IRP-Role", "AGENT")
+                .defaultHeader("X-IRP-Actor", "remediation-service")
+                .build();
     }
 }

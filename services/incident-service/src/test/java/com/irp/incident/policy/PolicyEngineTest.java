@@ -2,8 +2,10 @@ package com.irp.incident.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("eval")
 class PolicyEngineTest {
 
     private final PolicyEngine engine = new PolicyEngine();

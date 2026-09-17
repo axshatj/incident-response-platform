@@ -36,6 +36,9 @@ jobs:
       - name: Verify (compile + tests)
         run: ./mvnw -B -ntp verify
 
+      - name: Agent evaluation suite
+        run: ./mvnw -B -ntp -pl services/incident-service,services/agent-service -am test -Dgroups=eval
+
       - name: Upload Surefire reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

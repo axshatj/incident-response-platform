@@ -8,6 +8,7 @@ import com.irp.agent.client.IncidentServiceClient.ObservationDto;
 import com.irp.agent.client.IncidentServiceClient.RootCauseDto;
 import com.irp.agent.client.IncidentServiceClient.ToolCallDto;
 import com.irp.agent.llm.StructuredLlm;
+import com.irp.agent.observability.AgentMetrics;
 import com.irp.agent.schema.InvestigationOutput;
 import com.irp.agent.schema.RemediationPlanOutput;
 import com.irp.agent.schema.RootCauseOutput;
@@ -69,6 +70,7 @@ public class InvestigationOrchestrator {
     private final IncidentServiceClient incidents;
     private final StructuredLlm llm;
     private final OpsTools tools;
+    private final AgentMetrics metrics;
 
     private final int maxToolCalls;
     private final long maxLatencyMs;
@@ -76,11 +78,13 @@ public class InvestigationOrchestrator {
     public InvestigationOrchestrator(IncidentServiceClient incidents,
                                      StructuredLlm llm,
                                      OpsTools tools,
+                                     AgentMetrics metrics,
                                      @Value("${irp.agent.budget.max-tool-calls}") int maxToolCalls,
                                      @Value("${irp.agent.budget.max-latency-ms}") long maxLatencyMs) {
         this.incidents = incidents;
         this.llm = llm;
         this.tools = tools;
+        this.metrics = metrics;
         this.maxToolCalls = maxToolCalls;
         this.maxLatencyMs = maxLatencyMs;
     }
@@ -116,6 +120,7 @@ public class InvestigationOrchestrator {
         ));
         incidents.advance(incidentId, "ROOT_CAUSE_IDENTIFIED", "RCA_GENERATED", "rca-agent", rca.rootCause());
         proposeRemediation(incident, rca, evidenceBundle, runs);
+        metrics.recordRun("INVESTIGATION", true);
         log.info("Investigation complete for {} confidence={}", incidentId, rca.confidence());
     }
 
@@ -151,6 +156,7 @@ public class InvestigationOrchestrator {
         ));
         incidents.advance(incidentId, "ROOT_CAUSE_IDENTIFIED", "RCA_GENERATED", "rca-agent", rca.rootCause());
         proposeRemediation(incident, rca, evidenceBundle, runs);
+        metrics.recordRun("INVESTIGATION_RETRY", true);
         log.info("Verification retry investigation complete for {}", incidentId);
     }
 
@@ -230,6 +236,7 @@ public class InvestigationOrchestrator {
                     evidence.append("- ").append(tool).append(": ").append(preview).append('\n');
                 }
                 used++;
+                metrics.recordTool(tool, "OK".equals(status));
             }
             runs.add(completedRun(runId, "INVESTIGATION_TOOLS", t0, nano, calls));
             return evidence.toString();

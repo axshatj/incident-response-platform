@@ -13,11 +13,13 @@ import com.irp.agent.client.IncidentServiceClient.IncidentDto;
 import com.irp.agent.client.IncidentServiceClient.InvestigationReport;
 import com.irp.agent.client.IncidentServiceClient.KnowledgeHitDto;
 import com.irp.agent.llm.StructuredLlm;
+import com.irp.agent.observability.AgentMetrics;
 import com.irp.agent.schema.InvestigationOutput;
 import com.irp.agent.schema.RemediationPlanOutput;
 import com.irp.agent.schema.RootCauseOutput;
 import com.irp.agent.schema.TriageOutput;
 import com.irp.agent.tools.StubOpsTools;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +39,8 @@ class InvestigationOrchestratorTest {
 
     @BeforeEach
     void setUp() {
-        orchestrator = new InvestigationOrchestrator(incidents, llm, new StubOpsTools(), 4, 10_000);
+        orchestrator = new InvestigationOrchestrator(incidents, llm, new StubOpsTools(),
+                new AgentMetrics(new SimpleMeterRegistry()), 4, 10_000);
     }
 
     @Test

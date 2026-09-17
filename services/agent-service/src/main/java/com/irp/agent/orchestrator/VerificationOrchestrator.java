@@ -4,6 +4,7 @@ import com.irp.agent.client.IncidentServiceClient;
 import com.irp.agent.client.IncidentServiceClient.IncidentDto;
 import com.irp.agent.client.IncidentServiceClient.RemediationViewDto;
 import com.irp.agent.llm.StructuredLlm;
+import com.irp.agent.observability.AgentMetrics;
 import com.irp.agent.schema.VerificationOutput;
 import com.irp.agent.tools.OpsTools;
 import java.util.ArrayList;
@@ -41,13 +42,16 @@ public class VerificationOrchestrator {
     private final IncidentServiceClient incidents;
     private final StructuredLlm llm;
     private final OpsTools tools;
+    private final AgentMetrics metrics;
 
     public VerificationOrchestrator(IncidentServiceClient incidents,
                                     StructuredLlm llm,
-                                    OpsTools tools) {
+                                    OpsTools tools,
+                                    AgentMetrics metrics) {
         this.incidents = incidents;
         this.llm = llm;
         this.tools = tools;
+        this.metrics = metrics;
     }
 
     public void handleVerifying(UUID incidentId) {
@@ -66,8 +70,10 @@ public class VerificationOrchestrator {
             }
             try {
                 signals.add(tool + ": " + truncate(tools.invoke(tool, incident.service())));
+                metrics.recordTool(tool, true);
             } catch (RuntimeException e) {
                 signals.add(tool + ": FAILED " + e.getMessage());
+                metrics.recordTool(tool, false);
             }
         }
 
@@ -83,6 +89,7 @@ public class VerificationOrchestrator {
         List<String> posted = new ArrayList<>(signals);
         posted.addAll(out.checks());
         incidents.postVerification(incidentId, out.outcome(), out.summary(), posted);
+        metrics.recordRun("VERIFICATION", true);
         log.info("Verification posted for {} outcome={}", incidentId, out.outcome());
     }
 

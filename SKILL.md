@@ -171,6 +171,7 @@ Supported failure classes to grow into (start with `database-connection-exhausti
 - [reference/architecture.md](reference/architecture.md) — full architecture, telemetry spec, Kafka event model + envelope, PostgreSQL data model, Redis usage, log search pattern, infrastructure, CI/CD.
 - [reference/ai-agents.md](reference/ai-agents.md) — agent I/O schemas, tool catalog, MCP server design, RAG pipeline, AI observability, evaluation harness.
 - [reference/safety-and-security.md](reference/safety-and-security.md) — remediation policy classes, deterministic executor contract, security model and roles.
+- [reference/threat-model.md](reference/threat-model.md) — STRIDE-lite threat model for the MVP control plane.
 
 ## Definition of Done
 

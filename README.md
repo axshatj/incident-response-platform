@@ -12,6 +12,7 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 | [reference/architecture.md](reference/architecture.md) | System architecture, telemetry, Kafka, data model, infra |
 | [reference/ai-agents.md](reference/ai-agents.md) | Agent schemas, MCP tools, RAG, evaluation |
 | [reference/safety-and-security.md](reference/safety-and-security.md) | Remediation policy, executor contract, security model |
+| [reference/threat-model.md](reference/threat-model.md) | STRIDE-lite threat model for the MVP control plane |
 
 ## Core Principle
 
@@ -19,17 +20,18 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 8
+## Status — Phase 9
 
 Delivered:
 
 - Incident Service (Spring Boot 3, Java 21) with immutable state-machine + audit trail
 - PostgreSQL 16 + **pgvector** via Docker Compose
 - REST API (`/api/incidents/*`, `/api/knowledge/search`, remediation plan/execution, verification) and React dashboard
+- **Header RBAC** (`X-IRP-Role` / `X-IRP-Actor`) + in-memory rate limit on the public API; AGENT cannot approve
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics** for lifecycle, eventing, RAG, MCP, remediation, and verification
-- **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
+- **Custom domain metrics** for lifecycle, eventing, RAG, MCP, remediation, verification, and LLM/tool calls
+- **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana (incident + agent dashboards)
 - **Kafka (KRaft) + Kafka UI** for event-driven processing
 - **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
 - **Retries + DLT**: `DefaultErrorHandler` with `FixedBackOff(2s, 3)` → `telemetry.alerts.DLT`
@@ -41,10 +43,27 @@ Delivered:
 - **Policy engine**: LOW auto-execute, HIGH requires approval, CRITICAL prohibited
 - **Remediation service**: deterministic simulated Kubernetes rollback with namespace/deployment/revision allowlists and idempotency keys
 - **Verification**: recovery overlay on successful execution, auto-resolve, bounded retry (`irp.verification.max-attempts`, default 2), then escalate for human resolve
+- **Eval suite** (`@Tag("eval")`) for tool allowlists, RCA keywords, unsafe-action refusal, verification schema — run in CI
 - **Stub LLM** by default so the MVP path runs without an API key
-- Dashboard shows observations, cited knowledge, proposed rollback, execution audit, and verification outcome
+- Dashboard shows observations, cited knowledge, proposed rollback, execution audit, verification, and a demo role picker
 
-Next: Phase 9 — Production polish (auth, eval suite, threat model).
+The nine-phase MVP is complete. Production OIDC belongs in front of incident-service, not inside the agent.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[React UI] -->|X-IRP-Role| IS[incident-service]
+  Alert[telemetry.alerts] --> IS
+  IS --> PG[(PostgreSQL)]
+  IS --> K[Kafka]
+  K --> AG[agent-service]
+  AG -->|MCP read| MCP[ops-mcp-server]
+  AG -->|plans / verification| IS
+  K --> REM[remediation-service]
+  REM -->|simulated rollback| IS
+  IS --> PROM[Prometheus / Grafana]
+```
 
 ## Quickstart
 
@@ -69,14 +88,22 @@ docker compose -f infra/docker-compose.yml up --build
 
 Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident-service on port 8080.
 
+The UI sends `X-IRP-Role` (default **APPROVER**) and `X-IRP-Actor`. Curl needs the same headers:
+
+```bash
+export IRP_AUTH='-H X-IRP-Role: APPROVER -H X-IRP-Actor: you'
+```
+
+Set `IRP_AUTH_ENABLED=false` only for throwaway local scripts. See [reference/threat-model.md](reference/threat-model.md).
+
 ### Tool URLs
 
 | Tool | URL | What to look at |
 |------|-----|-----------------|
 | Dashboard UI | http://localhost:5173 | Incident list, detail, timeline, lifecycle actions |
 | Incident API | http://localhost:8080 | `/api/incidents`, `/api/knowledge/search`, `/actuator/health`, `/actuator/prometheus` |
-| Grafana | http://localhost:3000 | IRP → **Incident Service — Overview** (anonymous Viewer, or `admin`/`admin`) |
-| Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total`, `irp_alerts_consumed_total`, `irp_rag_retrieved_total` |
+| Grafana | http://localhost:3000 | IRP → **Incident Service — Overview** and **Agent Service — AI observability** |
+| Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total`, `irp_agent_llm_total`, `irp_verification_outcome_total` |
 | Jaeger | http://localhost:16686 | Service = `incident-service`, look for `incident.create` / `incident.transition` spans |
 | Kafka UI | http://localhost:8090 | Cluster `irp` — inspect topics `telemetry.alerts`, `incident.detected`, `incident.updated`, `telemetry.alerts.DLT` |
 | Agent API | http://localhost:8081 | `/actuator/health` — consumes `incident.detected` and writes investigation artifacts |
@@ -89,14 +116,14 @@ Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident
 # Loop: create an incident, then walk it partway to trigger both a legal and an illegal transition
 for i in {1..10}; do
   ID=$(curl -sS -X POST http://localhost:8080/api/incidents \
-    -H "Content-Type: application/json" \
+    -H "Content-Type: application/json" $IRP_AUTH \
     -d '{"service":"payment-service","title":"DB pool saturated","severity":"SEV2","environment":"prod"}' \
     | jq -r .id)
   curl -sS -X POST "http://localhost:8080/api/incidents/$ID/acknowledge" \
-    -H "Content-Type: application/json" -d '{"actor":"loadgen"}' >/dev/null
+    -H "Content-Type: application/json" $IRP_AUTH -d '{"actor":"loadgen"}' >/dev/null
   # Illegal jump (TRIAGING -> RESOLVED) -> increments irp_incident_illegal_transitions_total
   curl -sS -X POST "http://localhost:8080/api/incidents/$ID/resolve" \
-    -H "Content-Type: application/json" -d '{"actor":"loadgen"}' >/dev/null
+    -H "Content-Type: application/json" $IRP_AUTH -d '{"actor":"loadgen"}' >/dev/null
 done
 ```
 
@@ -127,7 +154,7 @@ To exercise the DLT: send a malformed line (e.g. `{"eventType":"telemetry.alert"
 ### Search the knowledge base (Phase 5)
 
 ```bash
-curl -sS "http://localhost:8080/api/knowledge/search?query=payment-service%20hikari%20postgres%20pool&service=payment-service&topK=3"
+curl -sS $IRP_AUTH "http://localhost:8080/api/knowledge/search?query=payment-service%20hikari%20postgres%20pool&service=payment-service&topK=3"
 ```
 
 Expect the payment-service DB-pool runbook and `INC-2025-0412` near the top, not the Kafka consumer-lag note.
@@ -151,7 +178,7 @@ After an alert-driven investigation the dashboard shows a `ROLLBACK_DEPLOYMENT` 
 
 ```bash
 curl -sS -X POST "http://localhost:8080/api/incidents/<id>/approve" \
-  -H "Content-Type: application/json" -d '{"actor":"you","note":"approved rollback to r41"}'
+  -H "Content-Type: application/json" $IRP_AUTH -d '{"actor":"you","note":"approved rollback to r41"}'
 ```
 
 The remediation-service then performs a simulated Kubernetes rollback (`prod/payment-service` 42 → 41) and the incident moves to `VERIFYING`. `SHELL` / `DROP_DATABASE` proposals are rejected with HTTP 403 before any executor runs.
@@ -161,10 +188,18 @@ The remediation-service then performs a simulated Kubernetes rollback (`prod/pay
 Agent-service consumes `incident.updated` when `toStatus=VERIFYING` after `REMEDIATION_EXECUTED`. It overlays the successful rollback on (possibly stale) MCP snapshots and posts a verification result. incident-service will **not** mark `RESOLVED` unless a `SUCCEEDED` execution exists.
 
 ```bash
-curl -sS "http://localhost:8080/api/incidents/<id>/verification"
+curl -sS $IRP_AUTH "http://localhost:8080/api/incidents/<id>/verification"
 ```
 
 If verification returns `NOT_RESOLVED`, the incident loops to `INVESTIGATING` at most `irp.verification.max-attempts` times (default 2), then stays in `VERIFYING` with a `VERIFICATION_ESCALATED` audit event for a human `Resolve`.
+
+### Agent evaluation (Phase 9)
+
+```bash
+./mvnw -pl services/incident-service,services/agent-service -am test -Dgroups=eval
+```
+
+The suite checks tool allowlists, RCA keywords for the DB-exhaustion scenario, refusal of `SHELL` / `DROP_DATABASE`, verification schema, and role separation (AGENT cannot approve). CI runs the same tag after `verify`.
 
 ### Event topics
 
@@ -182,7 +217,7 @@ If verification returns `NOT_RESOLVED`, the incident loops to `INVESTIGATING` at
 ```bash
 # Create an incident
 curl -X POST http://localhost:8080/api/incidents \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json" $IRP_AUTH \
   -d '{
         "service": "payment-service",
         "title": "DB connection exhaustion",
@@ -192,11 +227,11 @@ curl -X POST http://localhost:8080/api/incidents \
       }'
 
 # List incidents
-curl http://localhost:8080/api/incidents
+curl $IRP_AUTH http://localhost:8080/api/incidents
 
 # Acknowledge (DETECTED -> TRIAGING)
 curl -X POST http://localhost:8080/api/incidents/<id>/acknowledge \
-  -H "Content-Type: application/json" -d '{"actor":"you"}'
+  -H "Content-Type: application/json" $IRP_AUTH -d '{"actor":"you"}'
 ```
 
 ### Local dev without Docker

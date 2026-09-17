@@ -1,5 +1,7 @@
 // Thin fetch wrapper. Vite proxies /api to http://localhost:8080 in dev.
 
+import { authHeaders } from "../auth";
+
 export type Severity = "SEV1" | "SEV2" | "SEV3" | "SEV4";
 
 export type IncidentStatus =
@@ -149,7 +151,11 @@ export interface CreateIncidentRequest {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...(init?.headers ?? {}),
+    },
     ...init,
   });
   if (!res.ok) {

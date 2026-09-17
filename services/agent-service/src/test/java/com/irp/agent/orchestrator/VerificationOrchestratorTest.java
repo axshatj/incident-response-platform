@@ -12,8 +12,10 @@ import com.irp.agent.client.IncidentServiceClient.ExecutionDto;
 import com.irp.agent.client.IncidentServiceClient.IncidentDto;
 import com.irp.agent.client.IncidentServiceClient.RemediationViewDto;
 import com.irp.agent.llm.StructuredLlm;
+import com.irp.agent.observability.AgentMetrics;
 import com.irp.agent.schema.VerificationOutput;
 import com.irp.agent.tools.StubOpsTools;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +35,8 @@ class VerificationOrchestratorTest {
 
     @BeforeEach
     void setUp() {
-        orchestrator = new VerificationOrchestrator(incidents, llm, new StubOpsTools());
+        orchestrator = new VerificationOrchestrator(incidents, llm, new StubOpsTools(),
+                new AgentMetrics(new SimpleMeterRegistry()));
     }
 
     @Test

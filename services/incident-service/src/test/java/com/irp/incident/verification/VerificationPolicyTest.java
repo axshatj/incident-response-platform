@@ -2,8 +2,10 @@ package com.irp.incident.verification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("eval")
 class VerificationPolicyTest {
 
     @Test

@@ -1,5 +1,6 @@
 package com.irp.agent.llm;
 
+import com.irp.agent.observability.AgentMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -18,16 +19,32 @@ public class StructuredLlm {
     private final ChatClient chatClient;
     private final ObjectMapper mapper;
     private final Validator validator;
+    private final AgentMetrics metrics;
 
     public StructuredLlm(ChatClient.Builder chatClientBuilder,
                          ObjectMapper mapper,
-                         Validator validator) {
+                         Validator validator,
+                         AgentMetrics metrics) {
         this.chatClient = chatClientBuilder.build();
         this.mapper = mapper;
         this.validator = validator;
+        this.metrics = metrics;
     }
 
     public <T> T generate(String system, String user, Class<T> type) {
+        String agentType = inferAgent(system);
+        long started = System.nanoTime();
+        try {
+            T value = generateUnchecked(system, user, type);
+            metrics.recordLlm(agentType, true, (System.nanoTime() - started) / 1_000_000L);
+            return value;
+        } catch (RuntimeException e) {
+            metrics.recordLlm(agentType, false, (System.nanoTime() - started) / 1_000_000L);
+            throw e;
+        }
+    }
+
+    private <T> T generateUnchecked(String system, String user, Class<T> type) {
         String raw = chatClient.prompt()
                 .system(system)
                 .user(user)
@@ -54,7 +71,29 @@ public class StructuredLlm {
         }
     }
 
-    static String extractJson(String raw) {
+    public static String inferAgent(String system) {
+        if (system == null) {
+            return "unknown";
+        }
+        if (system.contains("Triage Agent")) {
+            return "TRIAGE";
+        }
+        if (system.contains("Root Cause Agent")) {
+            return "RCA";
+        }
+        if (system.contains("Remediation Planning")) {
+            return "REMEDIATION";
+        }
+        if (system.contains("Verification Agent")) {
+            return "VERIFICATION";
+        }
+        if (system.contains("Investigation Agent")) {
+            return "INVESTIGATION";
+        }
+        return "unknown";
+    }
+
+    public static String extractJson(String raw) {
         String trimmed = raw.trim();
         int start = trimmed.indexOf('{');
         int end = trimmed.lastIndexOf('}');

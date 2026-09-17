@@ -73,3 +73,8 @@ irp:
     replicas: ${IRP_KAFKA_REPLICAS:1}
   verification:
     max-attempts: ${IRP_VERIFICATION_MAX_ATTEMPTS:2}
+  auth:
+    enabled: ${IRP_AUTH_ENABLED:true}
+  ratelimit:
+    enabled: ${IRP_RATELIMIT_ENABLED:true}
+    requests-per-minute: ${IRP_RATELIMIT_RPM:120}

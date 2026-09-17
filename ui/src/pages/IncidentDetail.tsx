@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Incident, type IncidentEvent, type InvestigationView, type RemediationView, type VerificationView } from "../api/client";
+import { getActor } from "../auth";
 import SeverityBadge from "../components/SeverityBadge";
 import StatusBadge from "../components/StatusBadge";
 
@@ -63,7 +64,7 @@ export default function IncidentDetail() {
     setBusy(action);
     setError(null);
     try {
-      await api[action](id, "dev-user", `${action} via dashboard`);
+      await api[action](id, getActor(), `${action} via dashboard`);
       await load();
     } catch (e) {
       const err = e as Error & { body?: { message?: string } };

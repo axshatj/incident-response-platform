@@ -77,3 +77,14 @@ ADMIN      manage policy and configuration
 ```
 
 **The AI agent NEVER inherits unrestricted administrator permissions.** It uses least-privilege, read-oriented credentials for investigation; remediation runs under separate, policy-gated credentials in the deterministic executor.
+
+## Demo authentication
+
+Local Compose uses header RBAC, not OIDC:
+
+```text
+X-IRP-Role:  VIEWER | OPERATOR | APPROVER | ADMIN | AGENT
+X-IRP-Actor: opaque operator name (audit trail)
+```
+
+`AGENT` is reserved for agent-service and remediation-service. It can post investigation artifacts and verification results; it cannot approve rollbacks or create incidents. See [threat-model.md](threat-model.md). Production should terminate OIDC at a gateway and map claims onto these roles.
