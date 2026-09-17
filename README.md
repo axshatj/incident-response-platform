@@ -19,7 +19,7 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 5
+## Status — Phase 6
 
 Delivered:
 
@@ -28,26 +28,27 @@ Delivered:
 - REST API (`/api/incidents/*`, `/api/knowledge/search`) and React dashboard (Vite + TS + Tailwind)
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics** for lifecycle, eventing, and RAG retrieval
+- **Custom domain metrics** for lifecycle, eventing, RAG, and MCP tool calls
 - **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
 - **Kafka (KRaft) + Kafka UI** for event-driven processing
 - **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
 - **Retries + DLT**: `DefaultErrorHandler` with `FixedBackOff(2s, 3)` → `telemetry.alerts.DLT`
 - **Idempotent consumer** via `alertId` → `external_id` unique constraint
 - **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA
-- **Deterministic tools first**: allowlisted `query_metrics`, `query_logs`, `query_traces`, `get_deployment_history`, `get_database_metrics` (no shell / kubectl)
+- **Ops MCP server**: JSON-RPC `initialize` / `tools/list` / `tools/call` over HTTP; read-only allowlist (no shell / kubectl)
+- **MCP client** in agent-service: tools are invoked remotely, not in-process
 - **RAG**: seeded runbooks / architecture / past incidents / policies; hybrid retrieve (hash embeddings + metadata filter + top-K snippets)
 - **Stub LLM** by default so the MVP path runs without an API key
 - Dashboard shows observations, cited knowledge, agent runs, tool calls, and root-cause evidence
 
-Next: Phase 6 — MCP (Incident Operations MCP server + client).
+Next: Phase 7 — Remediation (policy engine, approval, K8s executor).
 
 ## Quickstart
 
 Prerequisites: Docker Desktop, Node 20+, Java 21+ (only if building without Docker).
 
 ```bash
-# 1. Start the whole stack (Postgres+pgvector, incident-service, agent-service, OTel, Prometheus, Jaeger, Grafana, Kafka)
+# 1. Start the whole stack (Postgres+pgvector, incident-service, agent-service, ops-mcp-server, OTel, Prometheus, Jaeger, Grafana, Kafka)
 docker compose -f infra/docker-compose.yml up --build
 
 # 2. In another terminal, start the UI
@@ -76,6 +77,7 @@ Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident
 | Jaeger | http://localhost:16686 | Service = `incident-service`, look for `incident.create` / `incident.transition` spans |
 | Kafka UI | http://localhost:8090 | Cluster `irp` — inspect topics `telemetry.alerts`, `incident.detected`, `incident.updated`, `telemetry.alerts.DLT` |
 | Agent API | http://localhost:8081 | `/actuator/health` — consumes `incident.detected` and writes investigation artifacts |
+| Ops MCP | http://localhost:8082 | `GET /mcp/tools`, `POST /mcp` JSON-RPC (`tools/list`, `tools/call`) |
 
 ### Generate traffic to light up the dashboard
 
@@ -125,6 +127,19 @@ curl -sS "http://localhost:8080/api/knowledge/search?query=payment-service%20hik
 ```
 
 Expect the payment-service DB-pool runbook and `INC-2025-0412` near the top, not the Kafka consumer-lag note.
+
+### Call ops tools via MCP (Phase 6)
+
+```bash
+curl -sS http://localhost:8082/mcp/tools
+curl -sS http://localhost:8082/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_metrics","arguments":{"service":"payment-service"}}}'
+# shell / kubectl are rejected:
+curl -sS http://localhost:8082/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"shell","arguments":{"service":"payment-service"}}}'
+```
 
 ### Event topics
 
@@ -179,7 +194,8 @@ incident-response-platform/
 ├── mvnw, mvnw.cmd, .mvn/           # Maven wrapper
 ├── services/
 │   ├── incident-service/           # Lifecycle, Kafka consumers, investigation store, RAG
-│   └── agent-service/              # Spring AI triage + investigation (stub LLM by default)
+│   ├── agent-service/              # Spring AI triage + investigation (stub LLM by default)
+│   └── ops-mcp-server/             # Read-only Incident Operations MCP (JSON-RPC over HTTP)
 ├── ui/                             # React dashboard (Vite + TS + Tailwind)
 └── infra/
     ├── docker-compose.yml          # Full local stack

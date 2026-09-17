@@ -11,7 +11,7 @@ import com.irp.agent.llm.StructuredLlm;
 import com.irp.agent.schema.InvestigationOutput;
 import com.irp.agent.schema.RootCauseOutput;
 import com.irp.agent.schema.TriageOutput;
-import com.irp.agent.tools.OpsToolCatalog;
+import com.irp.agent.tools.OpsTools;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -58,14 +58,14 @@ public class InvestigationOrchestrator {
 
     private final IncidentServiceClient incidents;
     private final StructuredLlm llm;
-    private final OpsToolCatalog tools;
+    private final OpsTools tools;
 
     private final int maxToolCalls;
     private final long maxLatencyMs;
 
     public InvestigationOrchestrator(IncidentServiceClient incidents,
                                      StructuredLlm llm,
-                                     OpsToolCatalog tools,
+                                     OpsTools tools,
                                      @Value("${irp.agent.budget.max-tool-calls}") int maxToolCalls,
                                      @Value("${irp.agent.budget.max-latency-ms}") long maxLatencyMs) {
         this.incidents = incidents;
@@ -275,7 +275,7 @@ public class InvestigationOrchestrator {
     private TriageOutput sanitizePlan(TriageOutput triage) {
         List<String> plan = triage.investigationPlan().stream()
                 .map(String::trim)
-                .filter(OpsToolCatalog.ALLOWLIST::contains)
+                .filter(tools.allowlist()::contains)
                 .distinct()
                 .limit(maxToolCalls)
                 .toList();

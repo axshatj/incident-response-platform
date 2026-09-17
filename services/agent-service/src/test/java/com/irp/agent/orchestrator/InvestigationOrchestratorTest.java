@@ -15,7 +15,7 @@ import com.irp.agent.llm.StructuredLlm;
 import com.irp.agent.schema.InvestigationOutput;
 import com.irp.agent.schema.RootCauseOutput;
 import com.irp.agent.schema.TriageOutput;
-import com.irp.agent.tools.OpsToolCatalog;
+import com.irp.agent.tools.StubOpsTools;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +35,7 @@ class InvestigationOrchestratorTest {
 
     @BeforeEach
     void setUp() {
-        orchestrator = new InvestigationOrchestrator(incidents, llm, new OpsToolCatalog(), 4, 10_000);
+        orchestrator = new InvestigationOrchestrator(incidents, llm, new StubOpsTools(), 4, 10_000);
     }
 
     @Test

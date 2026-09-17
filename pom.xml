@@ -21,6 +21,7 @@
     <modules>
         <module>services/incident-service</module>
         <module>services/agent-service</module>
+        <module>services/ops-mcp-server</module>
     </modules>
 
     <properties>

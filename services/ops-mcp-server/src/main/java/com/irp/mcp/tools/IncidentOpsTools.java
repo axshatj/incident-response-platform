@@ -1,19 +1,15 @@
-package com.irp.agent.tools;
+package com.irp.mcp.tools;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
- * Deterministic ops tools used BEFORE the LLM is asked to reason. Results are
- * compact evidence strings — never raw log dumps. MCP comes in a later phase;
- * this in-process catalog is the Phase 4 stand-in.
- *
- * There is no shell, kubectl, or SQL execution tool.
+ * Deterministic, read-only ops capabilities. Compact evidence only — never raw
+ * dumps, never shell/kubectl/SQL. Remediation is a later service, not a tool.
  */
 @Component
-public class OpsToolCatalog {
+public class IncidentOpsTools {
 
     public static final Set<String> ALLOWLIST = Set.of(
             "query_metrics",
@@ -36,6 +32,18 @@ public class OpsToolCatalog {
             case "get_database_metrics" -> database(service);
             case "get_service_health" -> health(service);
             default -> throw new IllegalArgumentException("Tool not allowlisted: " + toolName);
+        };
+    }
+
+    public String description(String toolName) {
+        return switch (toolName) {
+            case "query_metrics" -> "Bounded RED/USE metrics for a service (p99, error rate, pool).";
+            case "query_logs" -> "Aggregated ERROR log summary. Never returns raw unbounded logs.";
+            case "query_traces" -> "Critical-path trace summary for the service.";
+            case "get_deployment_history" -> "Recent revisions and config diffs for the service.";
+            case "get_database_metrics" -> "Postgres connection/pool signals for the service.";
+            case "get_service_health" -> "Replica readiness and restart counts.";
+            default -> "Unknown tool";
         };
     }
 
@@ -89,10 +97,6 @@ public class OpsToolCatalog {
     }
 
     private static String compact(String service, String source, Map<String, String> fields) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("service", service);
-        body.put("source", source);
-        body.put("fields", fields);
         StringBuilder sb = new StringBuilder();
         sb.append(source).append(" for ").append(service).append(':');
         fields.forEach((k, v) -> sb.append(' ').append(k).append('=').append(v).append(';'));

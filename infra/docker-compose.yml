@@ -12,6 +12,7 @@
 #   kafka             - Kafka 3.7 in KRaft mode (no ZooKeeper), :9092 host / :29092 in-network
 #   kafka-ui          - Provectus Kafka UI for topic/message inspection, :8090
 #   agent-service     - Spring AI triage + investigation workers, :8081
+#   ops-mcp-server    - read-only Incident Operations MCP (JSON-RPC tools/list + tools/call), :8082
 
 name: irp
 
@@ -170,6 +171,25 @@ services:
       start_period: 40s
     restart: unless-stopped
 
+  ops-mcp-server:
+    build:
+      context: ..
+      dockerfile: services/ops-mcp-server/Dockerfile
+    container_name: irp-ops-mcp
+    environment:
+      IRP_MCP_PORT: 8082
+      IRP_ENVIRONMENT: local
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8082/actuator/health/readiness || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
   agent-service:
     build:
       context: ..
@@ -180,11 +200,14 @@ services:
         condition: service_healthy
       incident-service:
         condition: service_healthy
+      ops-mcp-server:
+        condition: service_healthy
     environment:
       IRP_AGENT_PORT: 8081
       IRP_KAFKA_BOOTSTRAP: kafka:29092
       IRP_KAFKA_GROUP: agent-service
       IRP_INCIDENT_BASE_URL: http://incident-service:8080
+      IRP_MCP_BASE_URL: http://ops-mcp-server:8082
       IRP_AGENT_LLM: stub
       SPRING_PROFILES_ACTIVE: docker
     ports:

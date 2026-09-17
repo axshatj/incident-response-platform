@@ -17,6 +17,12 @@ public class AgentConfig {
     @Bean
     RestClient incidentRestClient(RestClient.Builder builder,
                                   @org.springframework.beans.factory.annotation.Value("${irp.incident-service.base-url}") String baseUrl) {
-        return builder.baseUrl(baseUrl).build();
+        return builder.clone().baseUrl(baseUrl).build();
+    }
+
+    @Bean
+    RestClient mcpRestClient(RestClient.Builder builder,
+                             @org.springframework.beans.factory.annotation.Value("${irp.mcp.base-url}") String baseUrl) {
+        return builder.clone().baseUrl(baseUrl).build();
     }
 }

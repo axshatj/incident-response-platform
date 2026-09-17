@@ -34,6 +34,8 @@ management:
 irp:
   incident-service:
     base-url: ${IRP_INCIDENT_BASE_URL:http://localhost:8080}
+  mcp:
+    base-url: ${IRP_MCP_BASE_URL:http://localhost:8082}
   agent:
     llm:
       provider: ${IRP_AGENT_LLM:stub}

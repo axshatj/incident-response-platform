@@ -8,26 +8,26 @@ COPY services/incident-service/pom.xml services/incident-service/pom.xml
 COPY services/agent-service/pom.xml services/agent-service/pom.xml
 COPY services/ops-mcp-server/pom.xml services/ops-mcp-server/pom.xml
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q -pl services/agent-service -am dependency:go-offline
+    mvn -q -pl services/ops-mcp-server -am dependency:go-offline
 
-COPY services/agent-service/src services/agent-service/src
+COPY services/ops-mcp-server/src services/ops-mcp-server/src
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q -pl services/agent-service -am -DskipTests package
+    mvn -q -pl services/ops-mcp-server -am -DskipTests package
 
 FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
 RUN groupadd --system app && useradd --system --gid app --home /app app
 
-COPY --from=build /workspace/services/agent-service/target/agent-service.jar /app/app.jar
+COPY --from=build /workspace/services/ops-mcp-server/target/ops-mcp-server.jar /app/app.jar
 
 USER app
-EXPOSE 8081
+EXPOSE 8082
 
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseZGC -Djava.security.egd=file:/dev/./urandom" \
     SPRING_PROFILES_ACTIVE=docker
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=5 \
-  CMD wget --quiet --tries=1 --spider http://localhost:8081/actuator/health/readiness || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:8082/actuator/health/readiness || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
