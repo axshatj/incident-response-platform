@@ -31,6 +31,8 @@ public class IncidentMetrics {
     private static final String REMEDIATION_PROPOSED = "irp.remediation.proposed";
     private static final String REMEDIATION_PROHIBITED = "irp.remediation.prohibited";
     private static final String REMEDIATION_EXECUTED = "irp.remediation.executed";
+    private static final String VERIFICATION = "irp.verification.outcome";
+    private static final String VERIFICATION_ESCALATED = "irp.verification.escalated";
 
     private final MeterRegistry registry;
 
@@ -88,6 +90,14 @@ public class IncidentMetrics {
 
     public void recordRemediationExecuted(String result) {
         counter(REMEDIATION_EXECUTED, "result", result).increment();
+    }
+
+    public void recordVerification(String outcome) {
+        counter(VERIFICATION, "outcome", outcome).increment();
+    }
+
+    public void recordVerificationEscalated() {
+        counter(VERIFICATION_ESCALATED).increment();
     }
 
     private Counter counter(String name, String... tags) {

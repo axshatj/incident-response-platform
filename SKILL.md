@@ -122,6 +122,8 @@ POST /api/incidents/{id}/acknowledge
 POST /api/incidents/{id}/approve
 POST /api/incidents/{id}/reject
 POST /api/incidents/{id}/resolve
+POST /api/incidents/{id}/verification
+GET  /api/incidents/{id}/verification
 ```
 
 ## AI Agents (bounded and specialized)

@@ -1,5 +1,6 @@
 package com.irp.agent.client;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.irp.agent.schema.RootCauseOutput;
 import com.irp.agent.schema.TriageOutput;
 import java.time.Instant;
@@ -82,6 +83,28 @@ public class IncidentServiceClient {
                 .toBodilessEntity();
     }
 
+    public RemediationViewDto getRemediation(UUID incidentId) {
+        RemediationViewDto body = http.get()
+                .uri("/api/incidents/{id}/remediation", incidentId)
+                .retrieve()
+                .body(RemediationViewDto.class);
+        return body == null ? new RemediationViewDto(incidentId, null, List.of()) : body;
+    }
+
+    public void postVerification(UUID incidentId, String outcome, String summary, List<String> signals) {
+        http.post()
+                .uri("/api/incidents/{id}/verification", incidentId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "outcome", outcome,
+                        "summary", summary == null ? "" : summary,
+                        "signals", signals == null ? List.of() : signals
+                ))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record IncidentDto(
             UUID id,
             String externalId,
@@ -175,6 +198,20 @@ public class IncidentServiceClient {
             String blastRadius,
             Double confidence,
             String rationale
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record RemediationViewDto(
+            UUID incidentId,
+            Object plan,
+            List<ExecutionDto> executions
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ExecutionDto(
+            UUID id,
+            String status,
+            String resultPreview
     ) {}
 
     public static String noteFor(TriageOutput triage) {

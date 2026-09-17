@@ -60,4 +60,12 @@ class IncidentTest {
         incident.transitionTo(IncidentStatus.TRIAGING, Instant.now());
         assertThat(incident.getResolvedAt()).isNull();
     }
+
+    @Test
+    void verificationAttemptsStartAtZeroAndIncrement() {
+        Incident incident = newIncident();
+        assertThat(incident.getVerificationAttempts()).isZero();
+        assertThat(incident.incrementVerificationAttempts()).isEqualTo(1);
+        assertThat(incident.incrementVerificationAttempts()).isEqualTo(2);
+    }
 }

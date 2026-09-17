@@ -67,7 +67,20 @@ For each candidate, return: expected impact, risk, reversibility, blast radius, 
 
 After remediation, check: error rate, latency, pod health, database metrics, Kafka lag, relevant logs.
 
-Output: `RESOLVED | PARTIALLY_RESOLVED | NOT_RESOLVED`. If not resolved, route back to investigation with a bounded retry count.
+Output:
+
+```json
+{
+  "outcome": "RESOLVED",
+  "summary": "Rollback restored pool headroom; treating remaining MCP snapshots as stale.",
+  "checks": [
+    "DETERMINISTIC_RECOVERY SUCCEEDED",
+    "error rate expected to fall after pool size restored"
+  ]
+}
+```
+
+`outcome` is `RESOLVED | PARTIALLY_RESOLVED | NOT_RESOLVED`. incident-service overrides `RESOLVED` unless a remediation execution `SUCCEEDED`. `PARTIALLY_RESOLVED` is treated as not recovered. If not resolved, route back to investigation while `attempts < max-attempts` (default 2); otherwise escalate and stay in `VERIFYING`.
 
 ## MCP: Incident Operations Server
 

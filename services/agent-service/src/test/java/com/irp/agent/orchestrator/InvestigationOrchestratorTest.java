@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -94,6 +95,42 @@ class InvestigationOrchestratorTest {
         assertThat(report.getValue().observations()).anyMatch(o -> "KNOWLEDGE".equals(o.type()));
         assertThat(report.getValue().rootCause().evidence())
                 .anyMatch(e -> e.contains("payment-db-pool.md"));
+        verify(incidents).postRemediationPlan(eq(id), any());
+    }
+
+    @Test
+    void verificationRetryReinvestigatesFromInvestigating() {
+        UUID id = UUID.randomUUID();
+        when(incidents.get(id)).thenReturn(new IncidentDto(
+                id, "am-1", "payment-service", "DB pool exhausted", "timeouts",
+                "SEV2", "INVESTIGATING", "prod"));
+        when(incidents.startInvestigation(id)).thenReturn(UUID.randomUUID());
+        when(llm.generate(any(), any(), eq(InvestigationOutput.class)))
+                .thenReturn(new InvestigationOutput("still pool related", true));
+        when(llm.generate(any(), any(), eq(RootCauseOutput.class))).thenReturn(new RootCauseOutput(
+                "pool exhaustion after v42",
+                0.9,
+                List.of("pool saturated"),
+                List.of(),
+                List.of("payment-service")
+        ));
+        when(incidents.searchKnowledge(any(), eq("payment-service"), eq("prod"), anyInt()))
+                .thenReturn(List.of());
+        when(llm.generate(any(), any(), eq(RemediationPlanOutput.class))).thenReturn(new RemediationPlanOutput(
+                "ROLLBACK_DEPLOYMENT",
+                "prod",
+                "payment-service",
+                41,
+                "restore pool size",
+                "payment-service only",
+                0.88,
+                "roll back v42"
+        ));
+
+        orchestrator.handleRetry(id);
+
+        verify(incidents, never()).advance(eq(id), eq("TRIAGING"), any(), any(), any());
+        verify(incidents).advance(eq(id), eq("ROOT_CAUSE_IDENTIFIED"), eq("RCA_GENERATED"), eq("rca-agent"), any());
         verify(incidents).postRemediationPlan(eq(id), any());
     }
 }

@@ -55,6 +55,9 @@ public class Incident {
     @Column(name = "root_cause_id")
     private UUID rootCauseId;
 
+    @Column(name = "verification_attempts", nullable = false)
+    private int verificationAttempts = 0;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -93,10 +96,16 @@ public class Incident {
     public Instant getDetectedAt() { return detectedAt; }
     public Instant getResolvedAt() { return resolvedAt; }
     public UUID getRootCauseId() { return rootCauseId; }
+    public int getVerificationAttempts() { return verificationAttempts; }
     public Long getVersion() { return version; }
 
     public void attachRootCause(UUID rootCauseId) {
         this.rootCauseId = rootCauseId;
+    }
+
+    public int incrementVerificationAttempts() {
+        this.verificationAttempts += 1;
+        return this.verificationAttempts;
     }
 
     /**

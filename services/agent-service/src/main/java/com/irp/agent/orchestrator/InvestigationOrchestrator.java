@@ -119,6 +119,41 @@ public class InvestigationOrchestrator {
         log.info("Investigation complete for {} confidence={}", incidentId, rca.confidence());
     }
 
+    /**
+     * Bounded verification retry: re-run tools + RCA from INVESTIGATING without
+     * repeating triage. A previously stored plan is re-promoted by incident-service.
+     */
+    public void handleRetry(UUID incidentId) {
+        IncidentDto incident = incidents.get(incidentId);
+        if (!"INVESTIGATING".equals(incident.status())) {
+            log.info("Skipping verification retry for {} in status {}", incidentId, incident.status());
+            return;
+        }
+        long started = System.currentTimeMillis();
+        List<AgentRunDto> runs = new ArrayList<>();
+        List<ObservationDto> observations = new ArrayList<>();
+        UUID investigationId = incidents.startInvestigation(incidentId);
+        TriageOutput plan = new TriageOutput(
+                incident.severity(),
+                List.of(incident.service()),
+                List.of("query_metrics", "query_logs", "get_deployment_history", "get_database_metrics", "get_service_health")
+        );
+        String evidenceBundle = runTools(incident, plan, observations, runs, started);
+        evidenceBundle = retrieveKnowledge(incident, evidenceBundle, observations, runs);
+        InvestigationOutput investigation = runInvestigation(incident, evidenceBundle, runs);
+        RootCauseOutput rca = runRca(incident, evidenceBundle, runs);
+        incidents.postReport(incidentId, new InvestigationReport(
+                investigationId,
+                investigation.summary(),
+                observations,
+                runs,
+                RootCauseDto.from(rca)
+        ));
+        incidents.advance(incidentId, "ROOT_CAUSE_IDENTIFIED", "RCA_GENERATED", "rca-agent", rca.rootCause());
+        proposeRemediation(incident, rca, evidenceBundle, runs);
+        log.info("Verification retry investigation complete for {}", incidentId);
+    }
+
     private TriageOutput runTriage(IncidentDto incident, List<AgentRunDto> runs) {
         Instant t0 = Instant.now();
         long nano = System.nanoTime();

@@ -10,10 +10,13 @@ import com.irp.incident.api.dto.RemediationExecutionRequest;
 import com.irp.incident.api.dto.RemediationPlanRequest;
 import com.irp.incident.api.dto.RemediationView;
 import com.irp.incident.api.dto.TransitionRequest;
+import com.irp.incident.api.dto.VerificationRequest;
+import com.irp.incident.api.dto.VerificationView;
 import com.irp.incident.domain.Incident;
 import com.irp.incident.service.IncidentService;
 import com.irp.incident.service.InvestigationService;
 import com.irp.incident.service.RemediationCoordinator;
+import com.irp.incident.service.VerificationService;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -35,13 +38,16 @@ public class IncidentController {
     private final IncidentService incidents;
     private final InvestigationService investigations;
     private final RemediationCoordinator remediations;
+    private final VerificationService verifications;
 
     public IncidentController(IncidentService incidents,
                               InvestigationService investigations,
-                              RemediationCoordinator remediations) {
+                              RemediationCoordinator remediations,
+                              VerificationService verifications) {
         this.incidents = incidents;
         this.investigations = investigations;
         this.remediations = remediations;
+        this.verifications = verifications;
     }
 
     @GetMapping
@@ -155,5 +161,16 @@ public class IncidentController {
     public RemediationView recordExecution(@PathVariable UUID id,
                                            @Valid @RequestBody RemediationExecutionRequest request) {
         return remediations.recordExecution(id, request);
+    }
+
+    @PostMapping("/{id}/verification")
+    public IncidentResponse recordVerification(@PathVariable UUID id,
+                                               @Valid @RequestBody VerificationRequest request) {
+        return IncidentResponse.from(verifications.record(id, request));
+    }
+
+    @GetMapping("/{id}/verification")
+    public VerificationView verification(@PathVariable UUID id) {
+        return verifications.view(id);
     }
 }

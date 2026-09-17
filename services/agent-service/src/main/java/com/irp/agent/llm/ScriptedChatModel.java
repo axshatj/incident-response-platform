@@ -49,6 +49,18 @@ public class ScriptedChatModel implements ChatModel {
                       "rationale": "v42 raised the pool past Postgres max_connections; rolling back to 41 is reversible"
                     }
                     """;
+        } else if (contains(text, "Verification Agent") || contains(text, "Verification")) {
+            json = """
+                    {
+                      "outcome": "RESOLVED",
+                      "summary": "Deterministic recovery overlay shows the rollback succeeded; treating remaining MCP snapshots as stale pre-rollback evidence.",
+                      "checks": [
+                        "DETERMINISTIC_RECOVERY SUCCEEDED",
+                        "error rate expected to fall after pool size restored",
+                        "pod health assumed recovered after r41"
+                      ]
+                    }
+                    """;
         } else if (contains(text, "Root Cause") || contains(text, "root cause")) {
             boolean cited = contains(text, "RAG") || contains(text, "knowledge/");
             json = """

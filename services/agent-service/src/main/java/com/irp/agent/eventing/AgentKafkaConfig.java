@@ -12,4 +12,9 @@ public class AgentKafkaConfig {
     NewTopic incidentDetected() {
         return TopicBuilder.name("incident.detected").partitions(3).replicas(1).build();
     }
+
+    @Bean
+    NewTopic incidentUpdated() {
+        return TopicBuilder.name("incident.updated").partitions(3).replicas(1).build();
+    }
 }

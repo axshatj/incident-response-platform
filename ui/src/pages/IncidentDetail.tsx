@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, type Incident, type IncidentEvent, type InvestigationView, type RemediationView } from "../api/client";
+import { api, type Incident, type IncidentEvent, type InvestigationView, type RemediationView, type VerificationView } from "../api/client";
 import SeverityBadge from "../components/SeverityBadge";
 import StatusBadge from "../components/StatusBadge";
 
@@ -31,22 +31,25 @@ export default function IncidentDetail() {
   const [timeline, setTimeline] = useState<IncidentEvent[]>([]);
   const [investigation, setInvestigation] = useState<InvestigationView | null>(null);
   const [remediation, setRemediation] = useState<RemediationView | null>(null);
+  const [verification, setVerification] = useState<VerificationView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [i, t, inv, rem] = await Promise.all([
+      const [i, t, inv, rem, ver] = await Promise.all([
         api.getIncident(id),
         api.getTimeline(id),
         api.getInvestigation(id).catch(() => null),
         api.getRemediation(id).catch(() => null),
+        api.getVerification(id).catch(() => null),
       ]);
       setIncident(i);
       setTimeline(t);
       setInvestigation(inv);
       setRemediation(rem);
+      setVerification(ver);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -119,6 +122,13 @@ export default function IncidentDetail() {
             <dd>{incident.externalId ?? "—"}</dd>
           </div>
           <div>
+            <dt className="text-xs uppercase text-slate-500">Verification</dt>
+            <dd>
+              {incident.verificationAttempts ?? 0}
+              {verification ? ` / ${verification.maxAttempts}` : ""}
+            </dd>
+          </div>
+          <div>
             <dt className="text-xs uppercase text-slate-500">ID</dt>
             <dd className="truncate font-mono text-xs">{incident.id}</dd>
           </div>
@@ -189,6 +199,26 @@ export default function IncidentDetail() {
                   {ex.resultPreview ? ` — ${ex.resultPreview}` : ""}
                   {ex.errorMessage ? ` — ${ex.errorMessage}` : ""}
                 </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {verification?.latest && (
+        <section className="card">
+          <h2 className="mb-3 text-lg font-semibold">Verification</h2>
+          <p className="text-sm font-medium">{verification.latest.outcome}</p>
+          {verification.latest.summary && (
+            <p className="mt-2 text-sm text-slate-300">{verification.latest.summary}</p>
+          )}
+          <p className="mt-2 text-xs uppercase text-slate-500">
+            attempt {verification.latest.attempt} of {verification.maxAttempts}
+          </p>
+          {parseJsonList(verification.latest.signalsJson).length > 0 && (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-300">
+              {parseJsonList(verification.latest.signalsJson).map((item) => (
+                <li key={item}>{item}</li>
               ))}
             </ul>
           )}

@@ -149,6 +149,25 @@
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 22 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "sum by (outcome) (increase(irp_verification_outcome_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Verification outcomes (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes" }
       },
       "gridPos": { "h": 6, "w": 12, "x": 12, "y": 16 },

@@ -60,6 +60,7 @@ public class RemediationCoordinator {
         String key = idempotencyKey(incidentId, action, request.namespace(), request.deployment(), request.targetRevision());
         RemediationPlan existing = plans.findByIdempotencyKey(key).orElse(null);
         if (existing != null) {
+            advanceFromRootCause(incidentId, existing);
             return view(incidentId);
         }
 
@@ -85,16 +86,7 @@ public class RemediationCoordinator {
         );
         plans.save(plan);
         metrics.recordRemediationProposed(verdict.risk().name());
-
-        incidents.transition(incidentId, IncidentStatus.REMEDIATION_PROPOSED,
-                "REMEDIATION_PROPOSED", "remediation-planner", action + " risk=" + verdict.risk());
-        if (verdict.decision() == PolicyDecisionType.REQUIRE_APPROVAL) {
-            incidents.transition(incidentId, IncidentStatus.AWAITING_APPROVAL,
-                    "APPROVAL_REQUIRED", "policy-engine", verdict.reason());
-        } else {
-            incidents.transition(incidentId, IncidentStatus.REMEDIATING,
-                    "REMEDIATION_AUTO_APPROVED", "policy-engine", verdict.reason());
-        }
+        advanceFromRootCause(incidentId, plan);
         return view(incidentId);
     }
 
@@ -151,6 +143,24 @@ public class RemediationCoordinator {
         List<ExecutionView> execs = executions.findByIncidentIdOrderByStartedAtDesc(incidentId)
                 .stream().map(ExecutionView::from).toList();
         return new RemediationView(incidentId, plan, execs);
+    }
+
+    private void advanceFromRootCause(UUID incidentId, RemediationPlan plan) {
+        Incident incident = incidents.get(incidentId);
+        if (incident.getStatus() != IncidentStatus.ROOT_CAUSE_IDENTIFIED) {
+            return;
+        }
+        incidents.transition(incidentId, IncidentStatus.REMEDIATION_PROPOSED,
+                "REMEDIATION_PROPOSED", "remediation-planner", plan.getAction() + " risk=" + plan.getRisk());
+        if (PolicyDecisionType.REQUIRE_APPROVAL.name().equals(plan.getDecision())) {
+            plan.markStatus("AWAITING_APPROVAL");
+            incidents.transition(incidentId, IncidentStatus.AWAITING_APPROVAL,
+                    "APPROVAL_REQUIRED", "policy-engine", plan.getDecision());
+        } else {
+            plan.markStatus("APPROVED");
+            incidents.transition(incidentId, IncidentStatus.REMEDIATING,
+                    "REMEDIATION_AUTO_APPROVED", "policy-engine", plan.getDecision());
+        }
     }
 
     private java.util.Optional<RemediationPlan> latestPlan(UUID incidentId) {

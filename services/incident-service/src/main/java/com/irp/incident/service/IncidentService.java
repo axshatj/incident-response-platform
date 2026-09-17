@@ -154,6 +154,20 @@ public class IncidentService {
     }
 
     /**
+     * Audit-only write that does not change status. Used when verification
+     * exhausts its retry budget and a human must resolve from VERIFYING.
+     */
+    @Transactional
+    public Incident recordAudit(UUID id, String eventType, String actor, String note) {
+        Incident incident = incidents.findById(id)
+                .orElseThrow(() -> new IncidentNotFoundException(id));
+        Instant now = clock.instant();
+        writeEvent(incident.getId(), eventType, incident.getStatus(), incident.getStatus(), actor, note, now);
+        eventPublisher.publishUpdated(incident, incident.getStatus(), incident.getStatus(), eventType, actor, now);
+        return incident;
+    }
+
+    /**
      * Generic transition. Intended for internal callers (agents, workers) and
      * dev/admin flows. The transition MUST be legal per the state machine.
      */

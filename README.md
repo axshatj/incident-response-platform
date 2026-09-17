@@ -19,31 +19,32 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 7
+## Status — Phase 8
 
 Delivered:
 
 - Incident Service (Spring Boot 3, Java 21) with immutable state-machine + audit trail
 - PostgreSQL 16 + **pgvector** via Docker Compose
-- REST API (`/api/incidents/*`, `/api/knowledge/search`, remediation plan/execution) and React dashboard
+- REST API (`/api/incidents/*`, `/api/knowledge/search`, remediation plan/execution, verification) and React dashboard
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics** for lifecycle, eventing, RAG, MCP, and remediation
+- **Custom domain metrics** for lifecycle, eventing, RAG, MCP, remediation, and verification
 - **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
 - **Kafka (KRaft) + Kafka UI** for event-driven processing
 - **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
 - **Retries + DLT**: `DefaultErrorHandler` with `FixedBackOff(2s, 3)` → `telemetry.alerts.DLT`
 - **Idempotent consumer** via `alertId` → `external_id` unique constraint
-- **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA / Remediation plan
+- **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA / Remediation plan / Verification
 - **Ops MCP server**: JSON-RPC `initialize` / `tools/list` / `tools/call` over HTTP; read-only allowlist (no shell / kubectl)
 - **MCP client** in agent-service: tools are invoked remotely, not in-process
 - **RAG**: seeded runbooks / architecture / past incidents / policies; hybrid retrieve (hash embeddings + metadata filter + top-K snippets)
 - **Policy engine**: LOW auto-execute, HIGH requires approval, CRITICAL prohibited
 - **Remediation service**: deterministic simulated Kubernetes rollback with namespace/deployment/revision allowlists and idempotency keys
+- **Verification**: recovery overlay on successful execution, auto-resolve, bounded retry (`irp.verification.max-attempts`, default 2), then escalate for human resolve
 - **Stub LLM** by default so the MVP path runs without an API key
-- Dashboard shows observations, cited knowledge, proposed rollback, and execution audit
+- Dashboard shows observations, cited knowledge, proposed rollback, execution audit, and verification outcome
 
-Next: Phase 8 — Verification (recovery checks, bounded retry/escalation).
+Next: Phase 9 — Production polish (auth, eval suite, threat model).
 
 ## Quickstart
 
@@ -154,6 +155,16 @@ curl -sS -X POST "http://localhost:8080/api/incidents/<id>/approve" \
 ```
 
 The remediation-service then performs a simulated Kubernetes rollback (`prod/payment-service` 42 → 41) and the incident moves to `VERIFYING`. `SHELL` / `DROP_DATABASE` proposals are rejected with HTTP 403 before any executor runs.
+
+### Auto-verify recovery (Phase 8)
+
+Agent-service consumes `incident.updated` when `toStatus=VERIFYING` after `REMEDIATION_EXECUTED`. It overlays the successful rollback on (possibly stale) MCP snapshots and posts a verification result. incident-service will **not** mark `RESOLVED` unless a `SUCCEEDED` execution exists.
+
+```bash
+curl -sS "http://localhost:8080/api/incidents/<id>/verification"
+```
+
+If verification returns `NOT_RESOLVED`, the incident loops to `INVESTIGATING` at most `irp.verification.max-attempts` times (default 2), then stays in `VERIFYING` with a `VERIFICATION_ESCALATED` audit event for a human `Resolve`.
 
 ### Event topics
 

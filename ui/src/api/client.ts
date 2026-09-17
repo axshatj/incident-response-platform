@@ -25,6 +25,7 @@ export interface Incident {
   detectedAt: string;
   resolvedAt: string | null;
   rootCauseId: string | null;
+  verificationAttempts: number;
 }
 
 export interface IncidentEvent {
@@ -121,6 +122,22 @@ export interface RemediationExecutionView {
   completedAt: string | null;
 }
 
+export interface VerificationView {
+  incidentId: string;
+  attempts: number;
+  maxAttempts: number;
+  latest: VerificationRunView | null;
+}
+
+export interface VerificationRunView {
+  id: string;
+  attempt: number;
+  outcome: string;
+  summary: string | null;
+  signalsJson: string;
+  createdAt: string;
+}
+
 export interface CreateIncidentRequest {
   externalId?: string | null;
   service: string;
@@ -158,6 +175,7 @@ export const api = {
   getTimeline: (id: string) => request<IncidentEvent[]>(`/incidents/${id}/events`),
   getInvestigation: (id: string) => request<InvestigationView>(`/incidents/${id}/investigation`),
   getRemediation: (id: string) => request<RemediationView>(`/incidents/${id}/remediation`),
+  getVerification: (id: string) => request<VerificationView>(`/incidents/${id}/verification`),
   acknowledge: (id: string, actor?: string, note?: string) =>
     request<Incident>(`/incidents/${id}/acknowledge`, {
       method: "POST",
