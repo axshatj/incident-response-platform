@@ -94,8 +94,8 @@ jobs:
           file: services/incident-service/Dockerfile
           push: false
           load: false
-          cache-from: type=gha,scope:incident-service
-          cache-to: type=gha,mode=max,scope:incident-service
+          cache-from: type=gha,scope=incident-service
+          cache-to: type=gha,mode=max,scope=incident-service
           tags: irp/incident-service:ci
 
       - name: Build agent-service image
@@ -105,8 +105,8 @@ jobs:
           file: services/agent-service/Dockerfile
           push: false
           load: false
-          cache-from: type=gha,scope:agent-service
-          cache-to: type=gha,mode=max,scope:agent-service
+          cache-from: type=gha,scope=agent-service
+          cache-to: type=gha,mode=max,scope=agent-service
           tags: irp/agent-service:ci
 
       - name: Build ops-mcp-server image
@@ -116,8 +116,8 @@ jobs:
           file: services/ops-mcp-server/Dockerfile
           push: false
           load: false
-          cache-from: type=gha,scope:ops-mcp-server
-          cache-to: type=gha,mode=max,scope:ops-mcp-server
+          cache-from: type=gha,scope=ops-mcp-server
+          cache-to: type=gha,mode=max,scope=ops-mcp-server
           tags: irp/ops-mcp-server:ci
 
       - name: Build remediation-service image
@@ -127,6 +127,6 @@ jobs:
           file: services/remediation-service/Dockerfile
           push: false
           load: false
-          cache-from: type=gha,scope:remediation-service
-          cache-to: type=gha,mode=max,scope:remediation-service
+          cache-from: type=gha,scope=remediation-service
+          cache-to: type=gha,mode=max,scope=remediation-service
           tags: irp/remediation-service:ci

@@ -1,5 +1,0 @@
-irp:
-  auth:
-    enabled: false
-  ratelimit:
-    enabled: false

@@ -34,7 +34,10 @@ import org.testcontainers.utility.DockerImageName;
  *   3. redelivery of the same alertId is silently deduped.
  */
 @Testcontainers
-@SpringBootTest
+@SpringBootTest(properties = {
+        "irp.auth.enabled=false",
+        "irp.ratelimit.enabled=false"
+})
 class AlertConsumerIntegrationTest {
 
     @Container
