@@ -39,7 +39,7 @@ class AlertConsumerIntegrationTest {
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(
-            DockerImageName.parse("postgres:16-alpine"));
+            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     @Container
     static KafkaContainer kafka = new KafkaContainer(

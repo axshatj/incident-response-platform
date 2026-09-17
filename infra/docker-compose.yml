@@ -3,7 +3,7 @@
 #   docker compose -f infra/docker-compose.yml up --build
 #
 # Services (Phase 1 + Phase 2 + Phase 3):
-#   postgres          - PostgreSQL 16
+#   postgres          - PostgreSQL 16 + pgvector (recreate the volume if upgrading from postgres:16-alpine)
 #   incident-service  - Spring Boot 3, exports OTLP + Prometheus metrics, :8080
 #   otel-collector    - OpenTelemetry Collector (contrib), OTLP receiver, fan-out
 #   jaeger            - all-in-one, OTLP-native, UI :16686
@@ -17,7 +17,7 @@ name: irp
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: irp-postgres
     environment:
       POSTGRES_DB: irp

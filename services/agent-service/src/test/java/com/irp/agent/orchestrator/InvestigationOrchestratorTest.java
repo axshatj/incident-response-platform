@@ -2,6 +2,7 @@ package com.irp.agent.orchestrator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.irp.agent.client.IncidentServiceClient;
 import com.irp.agent.client.IncidentServiceClient.IncidentDto;
 import com.irp.agent.client.IncidentServiceClient.InvestigationReport;
+import com.irp.agent.client.IncidentServiceClient.KnowledgeHitDto;
 import com.irp.agent.llm.StructuredLlm;
 import com.irp.agent.schema.InvestigationOutput;
 import com.irp.agent.schema.RootCauseOutput;
@@ -53,10 +55,20 @@ class InvestigationOrchestratorTest {
         when(llm.generate(any(), any(), eq(RootCauseOutput.class))).thenReturn(new RootCauseOutput(
                 "pool exhaustion after v42",
                 0.9,
-                List.of("pool saturated"),
+                List.of("pool saturated", "Cited [runbook:knowledge/runbooks/payment-db-pool.md]"),
                 List.of(),
                 List.of("payment-service")
         ));
+        when(incidents.searchKnowledge(any(), eq("payment-service"), eq("prod"), anyInt()))
+                .thenReturn(List.of(new KnowledgeHitDto(
+                        UUID.randomUUID(),
+                        "runbook",
+                        "knowledge/runbooks/payment-db-pool.md",
+                        "Payment service database connection exhaustion",
+                        "payment-service",
+                        "Hikari pool at max; roll back payment-service.",
+                        0.87
+                )));
 
         orchestrator.handleDetected(id);
 
@@ -66,7 +78,10 @@ class InvestigationOrchestratorTest {
 
         ArgumentCaptor<InvestigationReport> report = ArgumentCaptor.forClass(InvestigationReport.class);
         verify(incidents).postReport(eq(id), report.capture());
-        assertThat(report.getValue().observations()).hasSize(2); // shell stripped from plan
+        assertThat(report.getValue().observations()).hasSize(3); // shell stripped; RAG added
         assertThat(report.getValue().observations()).noneMatch(o -> "SHELL".equals(o.type()));
+        assertThat(report.getValue().observations()).anyMatch(o -> "KNOWLEDGE".equals(o.type()));
+        assertThat(report.getValue().rootCause().evidence())
+                .anyMatch(e -> e.contains("payment-db-pool.md"));
     }
 }

@@ -37,6 +37,7 @@ public class ScriptedChatModel implements ChatModel {
                     }
                     """;
         } else if (contains(text, "Root Cause") || contains(text, "root cause")) {
+            boolean cited = contains(text, "RAG") || contains(text, "knowledge/");
             json = """
                     {
                       "rootCause": "payment-service v42 increased the DB connection pool and exhausted PostgreSQL connections",
@@ -44,12 +45,14 @@ public class ScriptedChatModel implements ChatModel {
                       "evidence": [
                         "DB connection acquisition latency increased after deployment v42",
                         "Deployment v42 changed hikari maximum-pool-size from 10 to 50",
-                        "PostgreSQL connection count reached the configured limit of 100"
+                        "PostgreSQL connection count reached the configured limit of 100"%s
                       ],
                       "counterEvidence": [],
                       "affectedComponents": ["payment-service", "postgres"]
                     }
-                    """;
+                    """.formatted(cited
+                    ? ",\n                        \"Cited [runbook:knowledge/runbooks/payment-db-pool.md] Payment service database connection exhaustion\""
+                    : "");
         } else {
             json = """
                     {

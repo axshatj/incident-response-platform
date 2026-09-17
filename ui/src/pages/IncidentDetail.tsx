@@ -6,6 +6,18 @@ import StatusBadge from "../components/StatusBadge";
 
 type Action = "acknowledge" | "approve" | "reject" | "resolve";
 
+function parseJsonList(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 const ACTIONS: { key: Action; label: string; hint: string }[] = [
   { key: "acknowledge", label: "Acknowledge", hint: "DETECTED → TRIAGING" },
   { key: "approve", label: "Approve", hint: "AWAITING_APPROVAL → REMEDIATING" },
@@ -140,6 +152,13 @@ export default function IncidentDetail() {
           <p className="mt-2 text-xs text-slate-500">
             confidence {(investigation.rootCause.confidence * 100).toFixed(0)}%
           </p>
+          {parseJsonList(investigation.rootCause.evidenceJson).length > 0 && (
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-300">
+              {parseJsonList(investigation.rootCause.evidenceJson).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -150,7 +169,7 @@ export default function IncidentDetail() {
             {investigation.observations.map((o) => (
               <li key={o.id} className="rounded border border-border p-2">
                 <div className="text-xs uppercase text-slate-500">
-                  {o.source} · {o.type}
+                  {o.type === "KNOWLEDGE" ? "Cited knowledge" : o.type} · {o.source}
                 </div>
                 <p className="mt-1 text-slate-200">{o.content}</p>
               </li>

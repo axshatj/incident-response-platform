@@ -19,16 +19,16 @@ Production-style AI platform that detects, investigates, diagnoses, and safely r
 
 The LLM never executes shell, `kubectl`, SQL, or cloud API calls directly.
 
-## Status — Phase 4
+## Status — Phase 5
 
 Delivered:
 
 - Incident Service (Spring Boot 3, Java 21) with immutable state-machine + audit trail
-- PostgreSQL 16 via Docker Compose
-- REST API (`/api/incidents/*`) and React dashboard (Vite + TS + Tailwind)
+- PostgreSQL 16 + **pgvector** via Docker Compose
+- REST API (`/api/incidents/*`, `/api/knowledge/search`) and React dashboard (Vite + TS + Tailwind)
 - **OpenTelemetry instrumentation** (Micrometer Tracing → OTLP) with trace/span propagation
 - **JSON structured logs** with `traceId` / `spanId` correlated to Jaeger
-- **Custom domain metrics** for lifecycle and eventing
+- **Custom domain metrics** for lifecycle, eventing, and RAG retrieval
 - **Observability stack**: OTel Collector, Prometheus, Jaeger, Grafana with pre-provisioned dashboard
 - **Kafka (KRaft) + Kafka UI** for event-driven processing
 - **Alert-driven ingestion**: `telemetry.alerts` → `AlertConsumer` → incident + `incident.detected` published
@@ -36,23 +36,31 @@ Delivered:
 - **Idempotent consumer** via `alertId` → `external_id` unique constraint
 - **Agent service**: Spring AI ChatClient + schema-validated Triage / Investigation / RCA
 - **Deterministic tools first**: allowlisted `query_metrics`, `query_logs`, `query_traces`, `get_deployment_history`, `get_database_metrics` (no shell / kubectl)
+- **RAG**: seeded runbooks / architecture / past incidents / policies; hybrid retrieve (hash embeddings + metadata filter + top-K snippets)
 - **Stub LLM** by default so the MVP path runs without an API key
-- Dashboard shows observations, agent runs, tool calls, and root-cause
+- Dashboard shows observations, cited knowledge, agent runs, tool calls, and root-cause evidence
 
-Next: Phase 5 — RAG (pgvector, runbooks, evidence retrieval).
+Next: Phase 6 — MCP (Incident Operations MCP server + client).
 
 ## Quickstart
 
 Prerequisites: Docker Desktop, Node 20+, Java 21+ (only if building without Docker).
 
 ```bash
-# 1. Start the whole stack (Postgres, incident-service, OTel Collector, Prometheus, Jaeger, Grafana)
+# 1. Start the whole stack (Postgres+pgvector, incident-service, agent-service, OTel, Prometheus, Jaeger, Grafana, Kafka)
 docker compose -f infra/docker-compose.yml up --build
 
 # 2. In another terminal, start the UI
 cd ui
 npm install
 npm run dev
+```
+
+If you previously ran Compose with `postgres:16-alpine`, recreate the volume so Flyway can install pgvector (`down -v` wipes local demo data only):
+
+```bash
+docker compose -f infra/docker-compose.yml down -v
+docker compose -f infra/docker-compose.yml up --build
 ```
 
 Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident-service on port 8080.
@@ -62,9 +70,9 @@ Open http://localhost:5173. The Vite dev server proxies `/api/*` to the incident
 | Tool | URL | What to look at |
 |------|-----|-----------------|
 | Dashboard UI | http://localhost:5173 | Incident list, detail, timeline, lifecycle actions |
-| Incident API | http://localhost:8080 | `/api/incidents`, `/actuator/health`, `/actuator/prometheus` |
+| Incident API | http://localhost:8080 | `/api/incidents`, `/api/knowledge/search`, `/actuator/health`, `/actuator/prometheus` |
 | Grafana | http://localhost:3000 | IRP → **Incident Service — Overview** (anonymous Viewer, or `admin`/`admin`) |
-| Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total`, `irp_alerts_consumed_total`, etc. |
+| Prometheus | http://localhost:9090 | Query `irp_incident_transitions_total`, `irp_alerts_consumed_total`, `irp_rag_retrieved_total` |
 | Jaeger | http://localhost:16686 | Service = `incident-service`, look for `incident.create` / `incident.transition` spans |
 | Kafka UI | http://localhost:8090 | Cluster `irp` — inspect topics `telemetry.alerts`, `incident.detected`, `incident.updated`, `telemetry.alerts.DLT` |
 | Agent API | http://localhost:8081 | `/actuator/health` — consumes `incident.detected` and writes investigation artifacts |
@@ -105,9 +113,18 @@ Within a second you should see:
 - An `incident.detected` message on that topic (visible in Kafka UI)
 - Counter `irp_alerts_consumed_total{result="created"}` incremented in Prometheus
 - Sending the same line again increments `irp_alerts_consumed_total{result="duplicate"}` and does **not** create a second incident (idempotent via `external_id`)
-- The agent-service consumes `incident.detected`, runs triage + bounded tools + RCA (stub LLM by default), and advances the incident to `ROOT_CAUSE_IDENTIFIED`
+- The agent-service consumes `incident.detected`, runs triage + bounded tools + RAG + RCA (stub LLM by default), and advances the incident to `ROOT_CAUSE_IDENTIFIED`
+- Retrieved runbooks appear as **Cited knowledge** observations on the incident detail page
 
 To exercise the DLT: send a malformed line (e.g. `{"eventType":"telemetry.alert"}`) — it will retry 3× then land in `telemetry.alerts.DLT`.
+
+### Search the knowledge base (Phase 5)
+
+```bash
+curl -sS "http://localhost:8080/api/knowledge/search?query=payment-service%20hikari%20postgres%20pool&service=payment-service&topK=3"
+```
+
+Expect the payment-service DB-pool runbook and `INC-2025-0412` near the top, not the Kafka consumer-lag note.
 
 ### Event topics
 
@@ -145,7 +162,7 @@ curl -X POST http://localhost:8080/api/incidents/<id>/acknowledge \
 ### Local dev without Docker
 
 ```bash
-# Start only Postgres (traces will silently fail to export - that's fine)
+# Start only Postgres+pgvector (traces will silently fail to export - that's fine)
 docker compose -f infra/docker-compose.yml up postgres -d
 
 # Run the service directly (uses the default profile: plain console logs)
@@ -161,7 +178,7 @@ incident-response-platform/
 ├── pom.xml                         # Parent Maven multi-module
 ├── mvnw, mvnw.cmd, .mvn/           # Maven wrapper
 ├── services/
-│   ├── incident-service/           # Lifecycle, Kafka consumers, investigation store
+│   ├── incident-service/           # Lifecycle, Kafka consumers, investigation store, RAG
 │   └── agent-service/              # Spring AI triage + investigation (stub LLM by default)
 ├── ui/                             # React dashboard (Vite + TS + Tailwind)
 └── infra/

@@ -58,6 +58,21 @@ public class IncidentServiceClient {
                 .toBodilessEntity();
     }
 
+    public List<KnowledgeHitDto> searchKnowledge(String query, String service, String environment, int topK) {
+        List<KnowledgeHitDto> hits = http.post()
+                .uri("/api/knowledge/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "query", query,
+                        "service", service == null ? "" : service,
+                        "environment", environment == null ? "" : environment,
+                        "topK", topK
+                ))
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+        return hits == null ? List.of() : hits;
+    }
+
     public record IncidentDto(
             UUID id,
             String externalId,
@@ -125,6 +140,20 @@ public class IncidentServiceClient {
                     rca.counterEvidence() == null ? List.of() : rca.counterEvidence(),
                     rca.affectedComponents()
             );
+        }
+    }
+
+    public record KnowledgeHitDto(
+            UUID id,
+            String source,
+            String path,
+            String title,
+            String service,
+            String snippet,
+            double score
+    ) {
+        public String citation() {
+            return "[" + source + ":" + path + "] " + title;
         }
     }
 

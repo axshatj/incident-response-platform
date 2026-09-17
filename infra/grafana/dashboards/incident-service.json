@@ -124,6 +124,31 @@
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 22 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum(increase(irp_rag_retrieved_total[5m]))",
+          "legendFormat": "docs",
+          "refId": "A"
+        }
+      ],
+      "title": "RAG documents retrieved (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
         "defaults": { "color": { "mode": "palette-classic" }, "unit": "bytes" }
       },
       "gridPos": { "h": 6, "w": 12, "x": 12, "y": 16 },

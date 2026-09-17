@@ -25,8 +25,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Runs the Phase 4 loop: triage → bounded tool investigation → RCA hypothesis.
- * Tools are invoked deterministically first; the LLM only sees compact evidence.
+ * Runs the investigation loop: triage → bounded tools → RAG retrieve → RCA.
+ * Tools and retrieval are deterministic; the LLM only sees compact evidence.
  */
 @Service
 public class InvestigationOrchestrator {
@@ -43,7 +43,7 @@ public class InvestigationOrchestrator {
             """;
 
     private static final String INVESTIGATION_SYSTEM = """
-            You are the Investigation Agent. You are given compact evidence collected by tools.
+            You are the Investigation Agent. You are given compact evidence collected by tools and retrieved knowledge.
             Return ONLY JSON with keys summary, sufficientEvidence.
             Do not request more raw logs. Do not include markdown.
             """;
@@ -51,6 +51,7 @@ public class InvestigationOrchestrator {
     private static final String RCA_SYSTEM = """
             You are the Root Cause Agent. Use only the supplied evidence.
             Return ONLY JSON with keys rootCause, confidence, evidence, counterEvidence, affectedComponents.
+            If retrieved knowledge citations are present, include those citation strings in evidence.
             Never present unsupported guesses as facts. If evidence is weak, lower confidence and populate counterEvidence.
             Do not include markdown.
             """;
@@ -92,6 +93,7 @@ public class InvestigationOrchestrator {
                 IncidentServiceClient.noteFor(triage));
 
         String evidenceBundle = runTools(incident, triage, observations, runs, started);
+        evidenceBundle = retrieveKnowledge(incident, evidenceBundle, observations, runs);
         InvestigationOutput investigation = runInvestigation(incident, evidenceBundle, runs);
         RootCauseOutput rca = runRca(incident, evidenceBundle, runs);
 
@@ -189,6 +191,47 @@ public class InvestigationOrchestrator {
             runs.add(failedRun(runId, "INVESTIGATION_TOOLS", t0, nano, e.getMessage()));
             throw e;
         }
+    }
+
+    /**
+     * Hybrid retrieve after tools. Failures are recorded but do not abort the
+     * investigation — tools still produced a usable evidence bundle.
+     */
+    private String retrieveKnowledge(IncidentDto incident,
+                                     String evidence,
+                                     List<ObservationDto> observations,
+                                     List<AgentRunDto> runs) {
+        Instant t0 = Instant.now();
+        long nano = System.nanoTime();
+        UUID runId = UUID.randomUUID();
+        String query = (incident.title() + " " + nullToEmpty(incident.description()) + " " + evidence).trim();
+        try {
+            List<IncidentServiceClient.KnowledgeHitDto> hits = incidents.searchKnowledge(
+                    query, incident.service(), incident.environment(), 3);
+            StringBuilder withRag = new StringBuilder(evidence);
+            for (IncidentServiceClient.KnowledgeHitDto hit : hits) {
+                String citation = hit.citation();
+                observations.add(new ObservationDto(
+                        "KNOWLEDGE",
+                        hit.source() + ":" + hit.path(),
+                        Instant.now(),
+                        citation + " — " + hit.snippet(),
+                        hit.score(),
+                        null
+                ));
+                withRag.append("- RAG ").append(citation).append(": ").append(hit.snippet()).append('\n');
+            }
+            runs.add(completedRun(runId, "RAG", t0, nano, List.of()));
+            return withRag.toString();
+        } catch (RuntimeException e) {
+            log.warn("RAG retrieval failed for {}: {}", incident.id(), e.getMessage());
+            runs.add(failedRun(runId, "RAG", t0, nano, e.getMessage()));
+            return evidence;
+        }
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private InvestigationOutput runInvestigation(IncidentDto incident, String evidence, List<AgentRunDto> runs) {

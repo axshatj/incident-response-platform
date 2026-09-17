@@ -27,6 +27,7 @@ public class IncidentMetrics {
     private static final String ALERTS_CONSUMED = "irp.alerts.consumed";
     private static final String EVENTS_PUBLISHED = "irp.events.published";
     private static final String EVENTS_PUBLISH_FAILED = "irp.events.publish_failed";
+    private static final String RAG_RETRIEVED = "irp.rag.retrieved";
 
     private final MeterRegistry registry;
 
@@ -68,6 +69,10 @@ public class IncidentMetrics {
 
     public void recordEventPublishFailed(String eventType) {
         counter(EVENTS_PUBLISH_FAILED, "event_type", eventType).increment();
+    }
+
+    public void recordRagRetrieved(int documentCount) {
+        counter(RAG_RETRIEVED).increment(documentCount);
     }
 
     private Counter counter(String name, String... tags) {
